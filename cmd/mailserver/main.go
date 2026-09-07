@@ -66,11 +66,16 @@ func usage() {
 Usage:
   mailserver serve --config <path>
   mailserver user create --config <path> --email user@domain.com --password secret [--admin]
+  mailserver user delete --config <path> --email user@domain.com
 
 Commands:
   serve         Run the SMTP, IMAP, webmail, and outbound relay services.
   user create   Create a mailbox user (and its local domain, if new).
-  dkim show     Print the DNS TXT record to publish for DKIM signing.`)
+  user delete   Delete a mailbox user, its messages, and its Maildir.
+  dkim show     Print the DNS TXT record to publish for DKIM signing.
+
+Mailboxes can also be created and deleted from the webmail UI's Admin
+page (/admin), available to any user created with --admin.`)
 }
 
 func cmdDKIM(args []string) {
@@ -148,7 +153,7 @@ func cmdServe(args []string) {
 				logger.Error("bootstrapping admin user", "error", err)
 				os.Exit(1)
 			}
-			if err := provisionMailboxes(context.Background(), cfg, db, admin); err != nil {
+			if err := imapbackend.ProvisionMailboxes(context.Background(), cfg, db, admin); err != nil {
 				logger.Error("provisioning admin mailboxes", "error", err)
 				os.Exit(1)
 			}
@@ -385,39 +390,35 @@ func setupTLS(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*tl
 	return tlsutil.Load("", "", cfg.Hostname, logger)
 }
 
-// provisionMailboxes ensures a user has the standard IMAP folders indexed
-// in the database and their Maildir directories created on disk.
-func provisionMailboxes(ctx context.Context, cfg *config.Config, db *store.Store, user *store.User) error {
-	local, domain, ok := address.Split(user.Email)
-	if !ok {
-		return fmt.Errorf("invalid user email %q", user.Email)
-	}
-	root := maildir.UserRoot(cfg.Storage.MaildirPath, domain, local)
-
-	folders := append([]string{"INBOX"}, maildir.DefaultFolders()...)
-	for _, name := range folders {
-		if _, err := db.EnsureMailbox(ctx, user.ID, name); err != nil {
-			return fmt.Errorf("ensuring mailbox %q: %w", name, err)
-		}
-		if err := maildir.New(maildir.FolderPath(root, name)).Init(); err != nil {
-			return fmt.Errorf("initializing maildir %q: %w", name, err)
-		}
-	}
-	return nil
-}
-
 func cmdUser(args []string) {
-	if len(args) < 1 || args[0] != "create" {
-		fmt.Fprintln(os.Stderr, "usage: mailserver user create --config <path> --email user@domain.com --password secret [--admin]")
+	if len(args) < 1 {
+		usageUser()
 		os.Exit(2)
 	}
+	switch args[0] {
+	case "create":
+		cmdUserCreate(args[1:])
+	case "delete":
+		cmdUserDelete(args[1:])
+	default:
+		usageUser()
+		os.Exit(2)
+	}
+}
 
+func usageUser() {
+	fmt.Fprintln(os.Stderr, `usage:
+  mailserver user create --config <path> --email user@domain.com --password secret [--admin]
+  mailserver user delete --config <path> --email user@domain.com`)
+}
+
+func cmdUserCreate(args []string) {
 	fs := flag.NewFlagSet("user create", flag.ExitOnError)
 	path := fs.String("config", "/etc/mailserver/config.yaml", "path to config YAML file")
 	email := fs.String("email", "", "mailbox email address, e.g. alice@example.com")
 	password := fs.String("password", "", "mailbox password")
 	admin := fs.Bool("admin", false, "grant admin privileges")
-	fs.Parse(args[1:])
+	fs.Parse(args)
 
 	if *email == "" || *password == "" {
 		fmt.Fprintln(os.Stderr, "--email and --password are required")
@@ -452,9 +453,53 @@ func cmdUser(args []string) {
 		fmt.Fprintf(os.Stderr, "creating user: %v\n", err)
 		os.Exit(1)
 	}
-	if err := provisionMailboxes(context.Background(), cfg, db, u); err != nil {
+	if err := imapbackend.ProvisionMailboxes(context.Background(), cfg, db, u); err != nil {
 		fmt.Fprintf(os.Stderr, "provisioning mailboxes: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Printf("created mailbox %s (id=%d, admin=%v)\n", u.Email, u.ID, u.IsAdmin)
+}
+
+func cmdUserDelete(args []string) {
+	fs := flag.NewFlagSet("user delete", flag.ExitOnError)
+	path := fs.String("config", "/etc/mailserver/config.yaml", "path to config YAML file")
+	email := fs.String("email", "", "mailbox email address, e.g. alice@example.com")
+	fs.Parse(args)
+
+	if *email == "" {
+		fmt.Fprintln(os.Stderr, "--email is required")
+		os.Exit(2)
+	}
+
+	cfg, err := config.Load(*path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	db, err := store.Open(cfg.Database.Driver, cfg.Database.DSN)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "opening store: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	u, err := db.GetUserByEmail(context.Background(), *email)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "looking up %q: %v\n", *email, err)
+		os.Exit(1)
+	}
+
+	if err := db.DeleteUser(context.Background(), u.ID); err != nil {
+		fmt.Fprintf(os.Stderr, "deleting user: %v\n", err)
+		os.Exit(1)
+	}
+
+	local, domain, _ := address.Split(u.Email)
+	root := maildir.UserRoot(cfg.Storage.MaildirPath, domain, local)
+	if err := os.RemoveAll(root); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: deleted %s from the directory, but removing its Maildir at %s failed: %v\n", u.Email, root, err)
+		os.Exit(1)
+	}
+	fmt.Printf("deleted mailbox %s\n", u.Email)
 }

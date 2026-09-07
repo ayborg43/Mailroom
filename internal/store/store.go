@@ -185,6 +185,38 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*User, error)
 	return &u, nil
 }
 
+// GetUserByID looks up a mailbox user by numeric id.
+func (s *Store) GetUserByID(ctx context.Context, id int64) (*User, error) {
+	var u User
+	err := s.db.GetContext(ctx, &u, s.db.Rebind(`SELECT id, domain_id, local_part, email, password_hash, is_admin, created_at FROM users WHERE id = ?`), id)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+// ListUsers returns every mailbox user across every domain, ordered by
+// email — for an admin-facing directory listing.
+func (s *Store) ListUsers(ctx context.Context) ([]User, error) {
+	var users []User
+	err := s.db.SelectContext(ctx, &users,
+		`SELECT id, domain_id, local_part, email, password_hash, is_admin, created_at FROM users ORDER BY email`)
+	return users, err
+}
+
+// DeleteUser removes a mailbox user from the directory. Its mailboxes and
+// indexed messages cascade-delete with it (see the users/mailboxes FK), but
+// the Maildir files on disk are untouched — callers must remove those
+// themselves (see maildir.UserRoot) since this package doesn't know the
+// storage base path.
+func (s *Store) DeleteUser(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, s.db.Rebind(`DELETE FROM users WHERE id = ?`), id)
+	return err
+}
+
 // CreateUser creates a mailbox user under domain, hashing password with bcrypt.
 func (s *Store) CreateUser(ctx context.Context, domainName, localPart, password string, isAdmin bool) (*User, error) {
 	domainName = strings.ToLower(domainName)

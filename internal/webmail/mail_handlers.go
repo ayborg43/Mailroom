@@ -12,6 +12,7 @@ import (
 
 type pageData struct {
 	Email         string
+	IsAdmin       bool
 	Folders       []imapbackend.FolderInfo
 	CurrentFolder string
 	Messages      []imapbackend.MessageSummary
@@ -62,6 +63,7 @@ func (s *Server) buildPageData(ctx context.Context, account *imapbackend.Account
 
 	return &pageData{
 		Email:         account.Email(),
+		IsAdmin:       account.IsAdmin(),
 		Folders:       folders,
 		CurrentFolder: folder,
 		Messages:      messages,

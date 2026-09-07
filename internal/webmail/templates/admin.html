@@ -1,0 +1,57 @@
+{{define "admin_page"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin - Mail</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="admin-page">
+    <h1>Mailboxes</h1>
+    <p><a href="/mail/INBOX">&larr; Back to Mail</a></p>
+
+    {{if .Error}}<div class="error-msg">{{.Error}}</div>{{end}}
+    {{if .Success}}<div class="success-msg">{{.Success}}</div>{{end}}
+
+    <table class="admin-table">
+      <thead>
+        <tr><th>Email</th><th>Admin</th><th></th></tr>
+      </thead>
+      <tbody>
+        {{range .Users}}
+        <tr>
+          <td>{{.Email}}</td>
+          <td>{{if .IsAdmin}}Yes{{end}}</td>
+          <td>
+            <form method="post" action="/admin/users/{{.ID}}/delete" onsubmit="return confirm('Delete {{.Email}}? This permanently removes its messages.');">
+              <button type="submit" class="btn btn-danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {{else}}
+        <tr><td colspan="3" class="empty-state">No mailboxes yet</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+
+    <h2>Add a mailbox</h2>
+    <form method="post" action="/admin/users" class="admin-form">
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" placeholder="alice@yourdomain.com" required autofocus>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <div class="field checkbox-field">
+        <label><input type="checkbox" name="is_admin"> Grant admin privileges</label>
+      </div>
+      <button type="submit" class="btn btn-primary">Create mailbox</button>
+    </form>
+  </div>
+</body>
+</html>
+{{end}}

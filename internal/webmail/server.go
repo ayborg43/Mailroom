@@ -58,6 +58,10 @@ func New(backend *imapbackend.Backend, sender *mailsend.Sender, hostname string,
 	mux.HandleFunc("GET /compose", s.requireAuth(s.handleComposeForm))
 	mux.HandleFunc("POST /compose", s.requireAuth(s.handleComposeSubmit))
 
+	mux.HandleFunc("GET /admin", s.requireAdmin(s.handleAdminPage))
+	mux.HandleFunc("POST /admin/users", s.requireAdmin(s.handleAdminCreateUser))
+	mux.HandleFunc("POST /admin/users/{id}/delete", s.requireAdmin(s.handleAdminDeleteUser))
+
 	s.mux = mux
 	return s
 }

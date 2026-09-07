@@ -44,6 +44,10 @@ func (b *Backend) Authenticate(ctx context.Context, email, password string) (*Ac
 
 func (a *Account) Email() string { return a.user.dbUser.Email }
 
+// IsAdmin reports whether this account has administrative privileges
+// (mailbox management, via the webmail Admin page).
+func (a *Account) IsAdmin() bool { return a.user.dbUser.IsAdmin }
+
 // FolderInfo summarizes one IMAP folder for a sidebar.
 type FolderInfo struct {
 	Name   string
