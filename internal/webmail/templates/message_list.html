@@ -1,0 +1,32 @@
+{{define "message_list"}}
+<div class="list-toolbar">
+  <form hx-get="/mail/{{.CurrentFolder}}/search" hx-target="#message-list" hx-swap="innerHTML">
+    <input type="search" name="q" placeholder="Search {{.CurrentFolder}}" value="{{.Query}}">
+  </form>
+</div>
+{{if not .Messages}}
+  <div class="empty-state">No messages</div>
+{{else}}
+  {{range .Messages}}
+  <a class="message-row{{if not (.HasFlag "\\Seen")}} unread{{end}}{{if eq .UID $.SelectedUID}} selected{{end}}"
+     href="/mail/{{$.CurrentFolder}}/{{.UID}}"
+     hx-get="/mail/{{$.CurrentFolder}}/{{.UID}}"
+     hx-target="#reading-pane"
+     hx-swap="innerHTML"
+     hx-push-url="true">
+    <div class="row-top">
+      <span class="row-from">{{if eq $.CurrentFolder "Sent"}}{{.To}}{{else}}{{.From}}{{end}}</span>
+      <span class="row-date">{{fmtDate .Date}}</span>
+    </div>
+    <div class="row-subject">{{if .Subject}}{{.Subject}}{{else}}(no subject){{end}}</div>
+  </a>
+  {{end}}
+{{end}}
+{{if gt .TotalPages 1}}
+<div class="pagination">
+  {{if gt .Page 1}}<a href="/mail/{{.CurrentFolder}}?page={{sub .Page 1}}">&larr; Newer</a>{{else}}<span></span>{{end}}
+  <span>Page {{.Page}} of {{.TotalPages}}</span>
+  {{if lt .Page .TotalPages}}<a href="/mail/{{.CurrentFolder}}?page={{add .Page 1}}">Older &rarr;</a>{{else}}<span></span>{{end}}
+</div>
+{{end}}
+{{end}}

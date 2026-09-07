@@ -1,0 +1,44 @@
+{{define "mail_page"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.CurrentFolder}} - Mail</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    {{template "sidebar" .}}
+    <section class="message-list" id="message-list">
+      {{template "message_list" .}}
+    </section>
+    <section class="reading-pane" id="reading-pane">
+      {{template "message_view" .}}
+    </section>
+  </div>
+</body>
+</html>
+{{end}}
+
+{{define "sidebar"}}
+<aside class="sidebar">
+  <div class="sidebar-header">Mail</div>
+  <a class="btn btn-primary compose-btn" href="/compose">Compose</a>
+  <nav>
+    {{range .Folders}}
+    <a class="folder-link{{if eq .Name $.CurrentFolder}} active{{end}}" href="/mail/{{.Name}}">
+      <span>{{.Name}}</span>
+      {{if gt .Unseen 0}}<span class="count">{{.Unseen}}</span>{{end}}
+    </a>
+    {{end}}
+  </nav>
+  <div class="sidebar-footer">
+    {{.Email}}<br>
+    <form method="post" action="/logout" style="margin-top:6px;">
+      <button type="submit" class="btn">Log out</button>
+    </form>
+  </div>
+</aside>
+{{end}}

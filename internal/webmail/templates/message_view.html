@@ -1,0 +1,33 @@
+{{define "message_view"}}
+{{if .Selected}}
+<article>
+  <div class="message-header">
+    <h2>{{if .Selected.Subject}}{{.Selected.Subject}}{{else}}(no subject){{end}}</h2>
+    <dl>
+      <dt>From</dt><dd>{{.Selected.From}}</dd>
+      <dt>To</dt><dd>{{.Selected.To}}</dd>
+      {{if .Selected.Cc}}<dt>Cc</dt><dd>{{.Selected.Cc}}</dd>{{end}}
+      <dt>Date</dt><dd>{{fmtDateLong .Selected.Date}}</dd>
+    </dl>
+    <div class="message-actions">
+      <a class="btn" href="/compose?mode=reply&folder={{.CurrentFolder}}&uid={{.Selected.UID}}">Reply</a>
+      <a class="btn" href="/compose?mode=replyall&folder={{.CurrentFolder}}&uid={{.Selected.UID}}">Reply All</a>
+      <a class="btn" href="/compose?mode=forward&folder={{.CurrentFolder}}&uid={{.Selected.UID}}">Forward</a>
+      <form method="post" action="/mail/{{.CurrentFolder}}/{{.Selected.UID}}/flag">
+        <button type="submit" class="btn">{{if .Selected.HasFlag "\\Flagged"}}Unflag{{else}}Flag{{end}}</button>
+      </form>
+      <form method="post" action="/mail/{{.CurrentFolder}}/{{.Selected.UID}}/delete">
+        <button type="submit" class="btn btn-danger">Delete</button>
+      </form>
+    </div>
+  </div>
+  {{if .Selected.HTMLBody}}
+  <iframe class="html-body" sandbox="" srcdoc="{{.Selected.HTMLBody}}"></iframe>
+  {{else}}
+  <div class="message-body">{{.Selected.TextBody}}</div>
+  {{end}}
+</article>
+{{else}}
+<div class="placeholder">Select a message to read</div>
+{{end}}
+{{end}}

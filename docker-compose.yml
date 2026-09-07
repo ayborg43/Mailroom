@@ -1,0 +1,102 @@
+# Works as a plain `docker compose up` stack, and imports directly as a
+# "Compose" application in Dokploy (or any platform that runs an existing
+# docker-compose.yml and provides its own Traefik). See README.md's
+# "Deploying with Dokploy" section for the exact steps and the one setting
+# (TRUSTED_PROXIES) you should change from the default when doing so.
+
+services:
+  mailserver:
+    build: .
+    image: mailserver:latest
+    restart: unless-stopped
+    # Mail protocol ports are published directly on the host: Traefik (or any
+    # HTTP reverse proxy, Dokploy's included) can't usefully proxy raw
+    # SMTP/IMAP. The webmail UI is plain HTTP on an internal port instead —
+    # it's reached through Traefik on the network below, never published
+    # directly here.
+    ports:
+      - "25:25" # inbound SMTP (MX)
+      - "587:587" # authenticated submission (STARTTLS)
+      - "993:993" # IMAP (implicit TLS)
+    networks:
+      - default
+      - traefik
+    volumes:
+      - mail-data:/data
+      - ./config.yaml:/etc/mailserver/config.yaml:ro
+    environment:
+      - TZ=UTC
+      # Secrets and per-deployment values can be set here (or through your
+      # platform's Environment Variables UI) instead of editing config.yaml;
+      # they override whatever config.yaml sets for the same setting. See
+      # README.md for the full list — these are the ones you'll actually
+      # want to touch:
+      - MAILSERVER_HOSTNAME=${MAILSERVER_HOSTNAME:-mail.example.com}
+      - MAILSERVER_DOMAINS=${MAILSERVER_DOMAINS:-example.com}
+      - MAILSERVER_ADMIN_EMAIL=${MAILSERVER_ADMIN_EMAIL:-admin@example.com}
+      - MAILSERVER_ADMIN_PASSWORD=${MAILSERVER_ADMIN_PASSWORD:-changeme}
+      # Only needed if a reverse proxy sits in front of the webmail port
+      # (Traefik always does) or a TCP load balancer sits in front of
+      # SMTP/IMAP (nothing does by default) — see README before setting
+      # this to anything other than empty.
+      - MAILSERVER_TRUSTED_PROXIES=${MAILSERVER_TRUSTED_PROXIES:-}
+      # Uncomment to point at a managed Postgres instead of the default
+      # embedded SQLite — e.g. a database Dokploy provisioned for you.
+      # - MAILSERVER_DATABASE_DRIVER=postgres
+      # - MAILSERVER_DATABASE_DSN=postgres://user:pass@host:5432/mailserver?sslmode=disable
+    # listen.metrics defaults to 127.0.0.1:9090 (loopback-only inside the
+    # container), which is enough for this healthcheck but NOT reachable
+    # from another container. To let a separate Prometheus container scrape
+    # /metrics, change listen.metrics to ":9090" in config.yaml — do not
+    # publish 9090 in `ports:` above; both /healthz and /metrics are
+    # unauthenticated by design.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:9090/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.webmail.rule=Host(`${MAILSERVER_HOSTNAME:-mail.example.com}`)
+      - traefik.http.routers.webmail.entrypoints=websecure
+      - traefik.http.routers.webmail.tls.certresolver=letsencrypt
+      - traefik.http.services.webmail.loadbalancer.server.port=8080
+    # Only relevant for the plain-Compose (non-Dokploy) path below, where
+    # this file also runs Postgres. Uncomment alongside the service below.
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
+
+  # Plain-Compose Postgres option. If you're on Dokploy, prefer its own
+  # managed Postgres feature instead (Create Database > Postgres in its
+  # UI) and point MAILSERVER_DATABASE_DSN at that — one less stateful
+  # container for this compose file to own, and you get Dokploy's backups.
+  # postgres:
+  #   image: postgres:16-alpine
+  #   restart: unless-stopped
+  #   environment:
+  #     - POSTGRES_USER=mailserver
+  #     - POSTGRES_PASSWORD=changeme
+  #     - POSTGRES_DB=mailserver
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U mailserver"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+
+networks:
+  # The shared network Traefik itself is attached to, so it can route to
+  # this service. Dokploy's own Traefik uses "dokploy-network" — set
+  # TRAEFIK_NETWORK=dokploy-network (as an env var, or directly below) when
+  # deploying there. For a hand-rolled Traefik setup, create this network
+  # once (`docker network create traefik`) before deploying either stack.
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
+
+volumes:
+  mail-data:
+  # postgres-data:

@@ -1,0 +1,4 @@
+.git
+*.md
+docker/
+configs/config.yaml

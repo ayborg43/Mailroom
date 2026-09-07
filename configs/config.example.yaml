@@ -1,0 +1,72 @@
+# Copy to config.yaml and adjust before running.
+#
+# hostname, domains, database.driver/dsn, admin.email/password, and
+# security.trusted_proxies can each be overridden by an environment
+# variable instead of editing this file — see ../.env.example and
+# README.md. Useful for secrets, or when deploying on a platform (Dokploy,
+# etc.) whose UI manages environment variables for you.
+
+hostname: mail.example.com
+domains:
+  - example.com
+
+listen:
+  smtp: ":25"         # inbound MTA-to-MTA delivery
+  submission: ":587"  # authenticated client submission (STARTTLS)
+  imap: ":993"        # implicit TLS
+  webmail: ":8080"    # plain HTTP; put a reverse proxy (Traefik) in front for HTTPS
+  metrics: "127.0.0.1:9090" # /healthz + /metrics, unauthenticated — never expose this publicly;
+                             # bind to 0.0.0.0:9090 only if Prometheus scrapes it from another container
+
+tls:
+  # Option A: mounted cert/key pair (takes precedence over acme below).
+  cert_file: ""
+  key_file: ""
+
+  # Option B: automatic renewal via DNS-01 ACME (needed because ports 80/443
+  # are owned by Traefik in front of this host, so HTTP-01/TLS-ALPN-01 don't work).
+  acme:
+    enabled: false
+    email: admin@example.com
+    cache_dir: /data/acme
+    provider: cloudflare
+    staging: true
+    options:
+      CLOUDFLARE_DNS_API_TOKEN: "changeme"
+
+database:
+  driver: sqlite # or "postgres"
+  dsn: /data/mailserver.db
+  # postgres example: "postgres://mailserver:password@postgres:5432/mailserver?sslmode=disable"
+
+storage:
+  maildir_path: /data/mail
+  queue_path: /data/queue
+
+dkim:
+  selector: default
+  private_key_path: /data/dkim/private.pem
+
+queue:
+  max_retries: 8
+  retry_interval_minutes: [1, 5, 15, 60, 240, 1440]
+
+admin:
+  email: admin@example.com
+  password: "changeme" # only used once, to bootstrap the first mailbox
+
+security:
+  # IPs/CIDRs allowed to supply the real client address on their own
+  # connection's behalf: X-Forwarded-For for the webmail login (from
+  # Traefik) or a PROXY protocol preamble for SMTP/IMAP (only relevant if
+  # a TCP-level load balancer sits in front of those ports — by default
+  # nothing does, since Traefik can't proxy raw SMTP/IMAP). Leave empty
+  # unless you know you need it: a connection from any address NOT in this
+  # list is never trusted to say who it's forwarding for, no matter what
+  # it sends — trusting the wrong thing here is how you end up banning
+  # your own reverse proxy.
+  trusted_proxies: []
+  auth_rate_limit:
+    max_attempts: 5     # failed attempts allowed within the window before banning
+    window_minutes: 15  # trailing window failures are counted over
+    ban_minutes: 15     # how long a ban lasts once triggered
