@@ -23,7 +23,7 @@ services:
       - traefik
     volumes:
       - mail-data:/data
-      - ./config.yaml:/etc/mailserver/config.yaml:ro
+      - ../files/config.yaml:/etc/mailserver/config.yaml:ro
     environment:
       - TZ=UTC
       # Secrets and per-deployment values can be set here (or through your
