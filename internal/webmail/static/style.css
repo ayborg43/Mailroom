@@ -132,6 +132,23 @@ a:hover { text-decoration: underline; }
 .message-body iframe { width: 100%; min-height: 400px; border: none; }
 .back-link { display: none; }
 
+.attachment-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-alt);
+  color: var(--text);
+  font-size: 13px;
+  max-width: 100%;
+}
+.attachment-chip:hover { background: var(--border); text-decoration: none; }
+.attachment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-size { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
+
 /* ---- Compose ---- */
 .compose-page { padding: 24px; max-width: 720px; }
 .compose-page h1 { font-size: 18px; }

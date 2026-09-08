@@ -22,6 +22,17 @@
       </form>
     </div>
   </div>
+  {{if .Selected.Attachments}}
+  <div class="attachment-list">
+    {{range .Selected.Attachments}}
+    <a class="attachment-chip" href="/mail/{{$.CurrentFolder}}/{{$.Selected.UID}}/attachment/{{.PartNum}}" download="{{.Filename}}">
+      <span class="attachment-icon" aria-hidden="true">&#128206;</span>
+      <span class="attachment-name">{{.Filename}}</span>
+      <span class="attachment-size">{{fmtSize .Size}}</span>
+    </a>
+    {{end}}
+  </div>
+  {{end}}
   {{if .Selected.HTMLBody}}
   <iframe class="html-body" sandbox="" srcdoc="{{.Selected.HTMLBody}}"></iframe>
   {{else}}

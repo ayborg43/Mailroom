@@ -2,6 +2,7 @@ package webmail
 
 import (
 	"embed"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -32,6 +33,18 @@ var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 	},
 	"add": func(a, b int) int { return a + b },
 	"sub": func(a, b int) int { return a - b },
+	"fmtSize": func(n int64) string {
+		const unit = 1024
+		if n < unit {
+			return fmt.Sprintf("%d B", n)
+		}
+		div, exp := int64(unit), 0
+		for m := n / unit; m >= unit; m /= unit {
+			div *= unit
+			exp++
+		}
+		return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
+	},
 }).ParseFS(templatesFS, "templates/*.html"))
 
 func render(w http.ResponseWriter, name string, data any) {

@@ -4,15 +4,29 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"mime"
+	"io"
 	"net/http"
 	netmail "net/mail"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/emersion/go-message/mail"
+
 	"github.com/sociolytik/mailserver/internal/imapbackend"
 )
+
+// maxComposeRequestSize caps a compose submission's total size (body +
+// every attachment), matching the sort of limit most mail providers apply.
+const maxComposeRequestSize = 25 << 20 // 25 MiB
+
+// composeAttachment is one file uploaded alongside a composed message,
+// read fully into memory (bounded by maxComposeRequestSize).
+type composeAttachment struct {
+	Filename    string
+	ContentType string
+	Data        []byte
+}
 
 type composeData struct {
 	To, Cc, Subject, Body string
@@ -149,10 +163,12 @@ func splitAddressList(lists ...string) []string {
 }
 
 func (s *Server) handleComposeSubmit(w http.ResponseWriter, r *http.Request, account *imapbackend.Account) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad form", http.StatusBadRequest)
+	r.Body = http.MaxBytesReader(w, r.Body, maxComposeRequestSize)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		render(w, "compose_page", &composeData{Error: "Message too large (max 25 MB including attachments)"})
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 
 	// Header values come straight from user input. A bare CR or LF here
 	// would let an attacker inject arbitrary extra headers (or even smuggle
@@ -190,6 +206,28 @@ func (s *Server) handleComposeSubmit(w http.ResponseWriter, r *http.Request, acc
 		}
 	}
 
+	var attachments []composeAttachment
+	for _, fh := range r.MultipartForm.File["attachments"] {
+		f, err := fh.Open()
+		if err != nil {
+			data.Error = "Failed to read attachment " + fh.Filename
+			render(w, "compose_page", data)
+			return
+		}
+		content, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			data.Error = "Failed to read attachment " + fh.Filename
+			render(w, "compose_page", data)
+			return
+		}
+		ct := fh.Header.Get("Content-Type")
+		if ct == "" {
+			ct = http.DetectContentType(content)
+		}
+		attachments = append(attachments, composeAttachment{Filename: fh.Filename, ContentType: ct, Data: content})
+	}
+
 	rcpts := make([]string, 0, len(toAddrs)+len(ccAddrs))
 	for _, a := range toAddrs {
 		rcpts = append(rcpts, a.Address)
@@ -198,7 +236,13 @@ func (s *Server) handleComposeSubmit(w http.ResponseWriter, r *http.Request, acc
 		rcpts = append(rcpts, a.Address)
 	}
 
-	raw := buildOutgoingMessage(s.Hostname, account.Email(), to, cc, subject, body, inReplyTo, references)
+	raw, err := buildOutgoingMessage(s.Hostname, account.Email(), toAddrs, ccAddrs, subject, body, inReplyTo, references, attachments)
+	if err != nil {
+		s.Logger.Error("building composed message", "from", account.Email(), "error", err)
+		data.Error = "Failed to build message: " + err.Error()
+		render(w, "compose_page", data)
+		return
+	}
 
 	sent, err := s.Sender.Send(account.Email(), rcpts, raw)
 	if err != nil {
@@ -223,37 +267,70 @@ func sanitizeHeaderValue(s string) string {
 	return s
 }
 
-func buildOutgoingMessage(hostname, from, to, cc, subject, body, inReplyTo, references string) []byte {
-	var b strings.Builder
-	fmt.Fprintf(&b, "From: %s\r\n", from)
-	fmt.Fprintf(&b, "To: %s\r\n", to)
-	if cc != "" {
-		fmt.Fprintf(&b, "Cc: %s\r\n", cc)
+// buildOutgoingMessage builds a mail.mime message: multipart/mixed with one
+// text/plain part plus one part per attachment (multipart/mixed with a
+// single text part when there are none — a normal, common message shape,
+// not a special case the library needs to avoid).
+func buildOutgoingMessage(hostname, from string, to, cc []*netmail.Address, subject, body, inReplyTo, references string, attachments []composeAttachment) ([]byte, error) {
+	var h mail.Header
+	h.SetAddressList("From", []*mail.Address{{Address: from}})
+	h.SetAddressList("To", to)
+	if len(cc) > 0 {
+		h.SetAddressList("Cc", cc)
 	}
-	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", subject))
-	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
-	fmt.Fprintf(&b, "Message-Id: <%s@%s>\r\n", generateLocalMessageID(), hostname)
+	h.SetSubject(subject)
+	h.SetDate(time.Now())
+	h.SetMessageID(generateLocalMessageID() + "@" + hostname)
 	if inReplyTo != "" {
-		fmt.Fprintf(&b, "In-Reply-To: <%s>\r\n", strings.Trim(inReplyTo, "<>"))
+		h.SetMsgIDList("In-Reply-To", []string{strings.Trim(inReplyTo, "<>")})
 	}
 	if references != "" {
-		fmt.Fprintf(&b, "References: %s\r\n", wrapMessageIDs(references))
+		h.SetMsgIDList("References", strings.Fields(references))
 	}
-	b.WriteString("MIME-Version: 1.0\r\n")
-	b.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
-	b.WriteString("Content-Transfer-Encoding: 8bit\r\n")
-	b.WriteString("\r\n")
-	b.WriteString(toCRLF(body))
-	return []byte(b.String())
-}
 
-func wrapMessageIDs(references string) string {
-	ids := strings.Fields(references)
-	wrapped := make([]string, len(ids))
-	for i, id := range ids {
-		wrapped[i] = "<" + strings.Trim(id, "<>") + ">"
+	var buf strings.Builder
+	mw, err := mail.CreateWriter(&buf, h)
+	if err != nil {
+		return nil, fmt.Errorf("creating writer: %w", err)
 	}
-	return strings.Join(wrapped, " ")
+
+	var th mail.InlineHeader
+	th.SetContentType("text/plain", map[string]string{"charset": "utf-8"})
+	tw, err := mw.CreateSingleInline(th)
+	if err != nil {
+		return nil, fmt.Errorf("creating text part: %w", err)
+	}
+	if _, err := tw.Write([]byte(toCRLF(body))); err != nil {
+		return nil, fmt.Errorf("writing text part: %w", err)
+	}
+	if err := tw.Close(); err != nil {
+		return nil, fmt.Errorf("closing text part: %w", err)
+	}
+
+	for _, att := range attachments {
+		ct := att.ContentType
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		var ah mail.AttachmentHeader
+		ah.SetContentType(ct, nil)
+		ah.SetFilename(att.Filename)
+		aw, err := mw.CreateAttachment(ah)
+		if err != nil {
+			return nil, fmt.Errorf("creating attachment %q: %w", att.Filename, err)
+		}
+		if _, err := aw.Write(att.Data); err != nil {
+			return nil, fmt.Errorf("writing attachment %q: %w", att.Filename, err)
+		}
+		if err := aw.Close(); err != nil {
+			return nil, fmt.Errorf("closing attachment %q: %w", att.Filename, err)
+		}
+	}
+
+	if err := mw.Close(); err != nil {
+		return nil, fmt.Errorf("closing writer: %w", err)
+	}
+	return []byte(buf.String()), nil
 }
 
 func generateLocalMessageID() string {

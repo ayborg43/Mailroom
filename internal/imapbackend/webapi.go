@@ -265,16 +265,28 @@ func (a *Account) Search(folder, query string) ([]MessageSummary, error) {
 	return summaries, nil
 }
 
+// AttachmentInfo summarizes one non-inline MIME part of a message, for
+// listing in the reading pane. PartNum is 1-indexed among attachment parts
+// only (in encounter order), which is the same numbering ExtractAttachment
+// uses to re-locate one on download.
+type AttachmentInfo struct {
+	PartNum     int
+	Filename    string
+	ContentType string
+	Size        int64
+}
+
 // FullMessage is what the reading pane and compose (for reply/forward)
 // need.
 type FullMessage struct {
 	MessageSummary
-	Cc         string
-	MessageID  string
-	InReplyTo  string
-	References string
-	TextBody   string
-	HTMLBody   string
+	Cc          string
+	MessageID   string
+	InReplyTo   string
+	References  string
+	TextBody    string
+	HTMLBody    string
+	Attachments []AttachmentInfo
 }
 
 // GetMessage fetches one message by UID, marking it \Seen (matching the
@@ -318,22 +330,24 @@ func (a *Account) GetMessage(folder string, uid uint32) (*FullMessage, error) {
 		}
 	}
 
-	textBody, htmlBody, references := extractBody(buf)
+	textBody, htmlBody, references, attachments := extractBody(buf)
 	full.TextBody = textBody
 	full.HTMLBody = htmlBody
 	full.References = strings.Join(references, " ")
+	full.Attachments = attachments
 
 	return full, nil
 }
 
 // extractBody walks a message's MIME structure for the first text/plain
-// and text/html parts (the two "views" a mail client shows), and returns
-// the References header's message-IDs (without angle brackets, matching
-// Envelope.MessageID/InReplyTo's convention) for reply threading.
-func extractBody(raw []byte) (textBody, htmlBody string, references []string) {
+// and text/html parts (the two "views" a mail client shows) plus a list of
+// every attachment part, and returns the References header's message-IDs
+// (without angle brackets, matching Envelope.MessageID/InReplyTo's
+// convention) for reply threading.
+func extractBody(raw []byte) (textBody, htmlBody string, references []string, attachments []AttachmentInfo) {
 	r, err := mail.CreateReader(bytes.NewReader(raw))
 	if err != nil {
-		return "", "", nil
+		return "", "", nil, nil
 	}
 	defer r.Close()
 
@@ -348,21 +362,94 @@ func extractBody(raw []byte) (textBody, htmlBody string, references []string) {
 			break
 		}
 
-		inline, ok := part.Header.(*mail.InlineHeader)
+		switch hdr := part.Header.(type) {
+		case *mail.InlineHeader:
+			ct, _, _ := hdr.ContentType()
+			body, _ := io.ReadAll(part.Body)
+			switch {
+			case strings.HasPrefix(ct, "text/html") && htmlBody == "":
+				htmlBody = string(body)
+			case strings.HasPrefix(ct, "text/plain") && textBody == "":
+				textBody = string(body)
+			}
+		case *mail.AttachmentHeader:
+			filename, _ := hdr.Filename()
+			ct, _, _ := hdr.ContentType()
+			body, _ := io.ReadAll(part.Body)
+			attachments = append(attachments, AttachmentInfo{
+				PartNum:     len(attachments) + 1,
+				Filename:    filename,
+				ContentType: ct,
+				Size:        int64(len(body)),
+			})
+		}
+	}
+	return textBody, htmlBody, references, attachments
+}
+
+// ExtractAttachment re-parses raw and returns the decoded bytes, filename,
+// and content type of its partNum'th attachment part (1-indexed among
+// attachment parts only — the same numbering extractBody produced
+// AttachmentInfo.PartNum in, since both walk the identical raw bytes via
+// the identical part sequence).
+func ExtractAttachment(raw []byte, partNum int) (data []byte, filename, contentType string, err error) {
+	r, err := mail.CreateReader(bytes.NewReader(raw))
+	if err != nil {
+		return nil, "", "", err
+	}
+	defer r.Close()
+
+	i := 0
+	for {
+		part, err := r.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, "", "", err
+		}
+
+		hdr, ok := part.Header.(*mail.AttachmentHeader)
 		if !ok {
 			continue
 		}
-		ct, _, _ := inline.ContentType()
-		body, _ := io.ReadAll(part.Body)
-
-		switch {
-		case strings.HasPrefix(ct, "text/html") && htmlBody == "":
-			htmlBody = string(body)
-		case strings.HasPrefix(ct, "text/plain") && textBody == "":
-			textBody = string(body)
+		i++
+		if i != partNum {
+			continue
 		}
+
+		data, err := io.ReadAll(part.Body)
+		if err != nil {
+			return nil, "", "", err
+		}
+		filename, _ := hdr.Filename()
+		ct, _, _ := hdr.ContentType()
+		return data, filename, ct, nil
 	}
-	return textBody, htmlBody, references
+	return nil, "", "", fmt.Errorf("attachment not found")
+}
+
+// GetAttachment fetches one attachment's raw bytes from a message, for the
+// webmail attachment-download route.
+func (a *Account) GetAttachment(folder string, uid uint32, partNum int) (data []byte, filename, contentType string, err error) {
+	mbox, err := a.user.mailbox(folder)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	mbox.mu.Lock()
+	msg := mbox.findByUIDLocked(imap.UID(uid))
+	mbox.mu.Unlock()
+	if msg == nil {
+		return nil, "", "", fmt.Errorf("message not found")
+	}
+
+	buf, err := msg.data()
+	if err != nil {
+		return nil, "", "", fmt.Errorf("reading message: %w", err)
+	}
+
+	return ExtractAttachment(buf, partNum)
 }
 
 // Append saves raw as a new message in folder with the given flags (e.g.

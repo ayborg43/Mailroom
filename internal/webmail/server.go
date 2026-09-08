@@ -54,6 +54,7 @@ func New(backend *imapbackend.Backend, sender *mailsend.Sender, hostname string,
 	mux.HandleFunc("GET /mail/{folder}/{uid}", s.requireAuth(s.handleMessage))
 	mux.HandleFunc("POST /mail/{folder}/{uid}/flag", s.requireAuth(s.handleFlag))
 	mux.HandleFunc("POST /mail/{folder}/{uid}/delete", s.requireAuth(s.handleDelete))
+	mux.HandleFunc("GET /mail/{folder}/{uid}/attachment/{part}", s.requireAuth(s.handleAttachmentDownload))
 
 	mux.HandleFunc("GET /compose", s.requireAuth(s.handleComposeForm))
 	mux.HandleFunc("POST /compose", s.requireAuth(s.handleComposeSubmit))

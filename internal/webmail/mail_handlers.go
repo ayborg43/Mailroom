@@ -3,6 +3,7 @@ package webmail
 import (
 	"context"
 	"fmt"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -204,4 +205,32 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request, account *i
 		return
 	}
 	http.Redirect(w, r, "/mail/"+folder, http.StatusSeeOther)
+}
+
+func (s *Server) handleAttachmentDownload(w http.ResponseWriter, r *http.Request, account *imapbackend.Account) {
+	folder := r.PathValue("folder")
+	uid, ok := parseUID(r)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	partNum, err := strconv.Atoi(r.PathValue("part"))
+	if err != nil || partNum < 1 {
+		http.NotFound(w, r)
+		return
+	}
+
+	data, filename, contentType, err := account.GetAttachment(folder, uid, partNum)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.Write(data)
 }
