@@ -48,6 +48,26 @@ func (a *Account) Email() string { return a.user.dbUser.Email }
 // (mailbox management, via the webmail Admin page).
 func (a *Account) IsAdmin() bool { return a.user.dbUser.IsAdmin }
 
+// ChangePassword updates the account's own password after verifying
+// currentPassword against the live database record. It deliberately
+// re-reads the user rather than trusting a.user.dbUser: Backend.userFor
+// caches one *User per email for the life of the process (shared by every
+// session and IMAP connection for that address), so the cached copy can be
+// stale relative to the database — login already works around this by
+// checking a freshly-fetched record (see Authenticate/Login), and this does
+// the same rather than adding cache-invalidation machinery for one rarely
+// used mutation.
+func (a *Account) ChangePassword(ctx context.Context, currentPassword, newPassword string) error {
+	fresh, err := a.user.backend.Store.GetUserByID(ctx, a.user.dbUser.ID)
+	if err != nil {
+		return fmt.Errorf("looking up account: %w", err)
+	}
+	if !store.VerifyPassword(fresh, currentPassword) {
+		return fmt.Errorf("current password is incorrect")
+	}
+	return a.user.backend.Store.SetPassword(ctx, fresh.ID, newPassword)
+}
+
 // FolderInfo summarizes one IMAP folder for a sidebar.
 type FolderInfo struct {
 	Name   string

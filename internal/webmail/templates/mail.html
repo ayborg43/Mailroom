@@ -36,7 +36,7 @@
   </nav>
   <div class="sidebar-footer">
     {{.Email}}<br>
-    {{if .IsAdmin}}<a href="/admin">Admin</a><br>{{end}}
+    <a href="/account">Account</a>{{if .IsAdmin}} &middot; <a href="/admin">Admin</a>{{end}}<br>
     <form method="post" action="/logout" style="margin-top:6px;">
       <button type="submit" class="btn">Log out</button>
     </form>

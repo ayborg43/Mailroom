@@ -62,6 +62,9 @@ func New(backend *imapbackend.Backend, sender *mailsend.Sender, hostname string,
 	mux.HandleFunc("POST /admin/users", s.requireAdmin(s.handleAdminCreateUser))
 	mux.HandleFunc("POST /admin/users/{id}/delete", s.requireAdmin(s.handleAdminDeleteUser))
 
+	mux.HandleFunc("GET /account", s.requireAuth(s.handleAccountPage))
+	mux.HandleFunc("POST /account/password", s.requireAuth(s.handleAccountPasswordChange))
+
 	s.mux = mux
 	return s
 }

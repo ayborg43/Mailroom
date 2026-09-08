@@ -256,6 +256,16 @@ func (s *Store) CreateUser(ctx context.Context, domainName, localPart, password 
 	return s.GetUserByEmail(ctx, email)
 }
 
+// SetPassword replaces a user's password, hashing it with bcrypt.
+func (s *Store) SetPassword(ctx context.Context, userID int64, newPassword string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hashing password: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx, s.db.Rebind(`UPDATE users SET password_hash = ? WHERE id = ?`), string(hash), userID)
+	return err
+}
+
 // VerifyPassword checks a plaintext password against the user's bcrypt hash.
 func VerifyPassword(u *User, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) == nil

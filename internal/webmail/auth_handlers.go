@@ -8,7 +8,8 @@ import (
 )
 
 type loginData struct {
-	Error string
+	Error  string
+	Notice string
 }
 
 func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
@@ -16,7 +17,11 @@ func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/mail/INBOX", http.StatusSeeOther)
 		return
 	}
-	render(w, "login_page", loginData{})
+	data := loginData{}
+	if r.URL.Query().Get("password_changed") == "1" {
+		data.Notice = "Password changed. Please sign in again."
+	}
+	render(w, "login_page", data)
 }
 
 func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
