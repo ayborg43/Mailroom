@@ -10,6 +10,12 @@
 </head>
 <body>
   <div class="app">
+    <input type="checkbox" id="sidebar-toggle" class="sidebar-toggle-checkbox">
+    <label for="sidebar-toggle" class="sidebar-backdrop" aria-hidden="true"></label>
+    <header class="mobile-bar">
+      <label for="sidebar-toggle" class="menu-btn" aria-label="Show folders">&#9776;</label>
+      <span class="mobile-bar-title">{{.CurrentFolder}}</span>
+    </header>
     {{template "sidebar" .}}
     <section class="message-list" id="message-list">
       {{template "message_list" .}}

@@ -15,26 +15,28 @@
     {{if .Error}}<div class="error-msg">{{.Error}}</div>{{end}}
     {{if .Success}}<div class="success-msg">{{.Success}}</div>{{end}}
 
-    <table class="admin-table">
-      <thead>
-        <tr><th>Email</th><th>Admin</th><th></th></tr>
-      </thead>
-      <tbody>
-        {{range .Users}}
-        <tr>
-          <td>{{.Email}}</td>
-          <td>{{if .IsAdmin}}Yes{{end}}</td>
-          <td>
-            <form method="post" action="/admin/users/{{.ID}}/delete" onsubmit="return confirm('Delete {{.Email}}? This permanently removes its messages.');">
-              <button type="submit" class="btn btn-danger">Delete</button>
-            </form>
-          </td>
-        </tr>
-        {{else}}
-        <tr><td colspan="3" class="empty-state">No mailboxes yet</td></tr>
-        {{end}}
-      </tbody>
-    </table>
+    <div class="table-scroll">
+      <table class="admin-table">
+        <thead>
+          <tr><th>Email</th><th>Admin</th><th></th></tr>
+        </thead>
+        <tbody>
+          {{range .Users}}
+          <tr>
+            <td>{{.Email}}</td>
+            <td>{{if .IsAdmin}}Yes{{end}}</td>
+            <td>
+              <form method="post" action="/admin/users/{{.ID}}/delete" onsubmit="return confirm('Delete {{.Email}}? This permanently removes its messages.');">
+                <button type="submit" class="btn btn-danger">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {{else}}
+          <tr><td colspan="3" class="empty-state">No mailboxes yet</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
 
     <h2>Add a mailbox</h2>
     <form method="post" action="/admin/users" class="admin-form">

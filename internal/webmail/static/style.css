@@ -35,7 +35,7 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 32px;
-  width: 320px;
+  width: min(320px, calc(100vw - 32px));
 }
 .login-box h1 { font-size: 18px; margin: 0 0 20px; }
 .field { margin-bottom: 14px; }
@@ -126,10 +126,11 @@ a:hover { text-decoration: underline; }
 .message-header h2 { margin: 0 0 10px; font-size: 18px; }
 .message-header dl { display: grid; grid-template-columns: 60px 1fr; gap: 2px 8px; font-size: 13px; color: var(--text-dim); margin: 0; }
 .message-header dt { font-weight: 600; }
-.message-header dd { margin: 0; }
-.message-actions { margin-top: 14px; display: flex; gap: 8px; }
+.message-header dd { margin: 0; word-break: break-word; }
+.message-actions { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
 .message-body { line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
 .message-body iframe { width: 100%; min-height: 400px; border: none; }
+.back-link { display: none; }
 
 /* ---- Compose ---- */
 .compose-page { padding: 24px; max-width: 720px; }
@@ -141,14 +142,121 @@ a:hover { text-decoration: underline; }
 .admin-page { padding: 24px; max-width: 640px; }
 .admin-page h1 { font-size: 18px; }
 .admin-page h2 { font-size: 15px; margin-top: 28px; }
+.table-scroll { overflow-x: auto; }
 .admin-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
 .admin-table th, .admin-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
 .admin-table th { color: var(--text-dim); font-weight: 600; }
 .admin-form { margin-top: 12px; }
 .checkbox-field label { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 14px; }
+/* Override .field input's width:100% (meant for text/password/email
+   inputs) — without it, this checkbox becomes a flex item whose
+   flex-basis resolves from that 100% width and stretches across the row,
+   shoving the label text out to the far edge. */
+.checkbox-field input[type="checkbox"] { width: auto; flex: 0 0 auto; }
 
 /* ---- Account ---- */
 .account-page { padding: 24px; max-width: 420px; }
 .account-page h1 { font-size: 18px; }
 .account-page h2 { font-size: 15px; margin-top: 24px; }
 .account-email { color: var(--text-dim); font-size: 13px; }
+
+/* ---- Mobile ---- */
+/* Hidden on desktop; the media query below turns these into the folder
+   drawer's open/close toggle. Declared here (not inside the query) so
+   there's one definition of "what these elements are" regardless of
+   viewport. */
+.sidebar-toggle-checkbox { display: none; }
+.sidebar-backdrop { display: none; }
+.mobile-bar { display: none; }
+
+@media (max-width: 768px) {
+  .app {
+    display: block;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .mobile-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: 48px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .menu-btn { font-size: 20px; line-height: 1; cursor: pointer; }
+  .mobile-bar-title { font-weight: 600; }
+
+  /* Folder drawer: a checkbox + <label for> pair toggles it without any
+     JS. The checkbox has to be a sibling of .sidebar (both direct
+     children of .app) for the ~ combinator below to reach it — its
+     position in the markup doesn't otherwise matter, so the visible
+     hamburger button can live inside .mobile-bar instead. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 80%;
+    max-width: 280px;
+    z-index: 30;
+    transform: translateX(-100%);
+    transition: transform .2s ease;
+  }
+  .sidebar-toggle-checkbox:checked ~ .sidebar {
+    transform: translateX(0);
+  }
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    background: rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease;
+  }
+  .sidebar-toggle-checkbox:checked ~ .sidebar-backdrop {
+    display: block;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .message-list {
+    height: calc(100vh - 48px);
+    border-right: none;
+  }
+
+  /* Reading pane covers the whole screen (over the message list) once it
+     actually has a message loaded into it — including after an htmx swap
+     of just #reading-pane's innerHTML, since :has() re-evaluates live.
+     The mobile bar's hamburger isn't useful mid-message, so it's swapped
+     out for the in-pane "Back" link at the same time. */
+  .reading-pane {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    padding: 16px;
+    background: var(--bg);
+    transform: translateX(100%);
+    transition: transform .2s ease;
+  }
+  .app:has(#reading-pane article) .reading-pane {
+    transform: translateX(0);
+  }
+  .app:has(#reading-pane article) .mobile-bar {
+    display: none;
+  }
+  .back-link {
+    display: inline-block;
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  .compose-page,
+  .admin-page,
+  .account-page {
+    padding: 16px;
+  }
+}

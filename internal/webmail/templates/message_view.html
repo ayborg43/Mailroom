@@ -2,6 +2,7 @@
 {{if .Selected}}
 <article>
   <div class="message-header">
+    <a class="back-link" href="/mail/{{.CurrentFolder}}">&larr; Back</a>
     <h2>{{if .Selected.Subject}}{{.Selected.Subject}}{{else}}(no subject){{end}}</h2>
     <dl>
       <dt>From</dt><dd>{{.Selected.From}}</dd>
