@@ -1,9 +1,11 @@
 // Package inboundauth verifies SPF, DKIM, and DMARC on inbound mail and
-// formats the result as an RFC 8601 Authentication-Results header. It only
-// verifies (annotates); it never rejects mail based on the result — that's
-// a policy decision left to whatever reads the header downstream (a mail
-// client's junk filter, a future spam-scoring pass, etc.), matching the
-// project's explicit "verification, not enforcement" scope for this phase.
+// formats the result as an RFC 8601 Authentication-Results header. It
+// never rejects mail outright based on the result, but Result.ShouldQuarantine
+// does drive one soft, reversible action: routing to Junk instead of
+// INBOX when the sending domain's own DMARC policy asks for it (see
+// Result for exactly when that is). Anything beyond that — outright
+// rejection, spam scoring on the SPF/DKIM results individually — is left
+// to whatever reads the header downstream.
 //
 // DMARC alignment uses golang.org/x/net/publicsuffix for the organizational
 // domain comparison relaxed alignment requires — the same public-suffix
@@ -35,11 +37,28 @@ import (
 // indefinitely.
 const dnsTimeout = 10 * time.Second
 
-// Verify runs SPF, DKIM, and DMARC checks on an inbound message and returns
-// a formatted Authentication-Results header value (without the header name
-// or trailing CRLF) using authServID — normally the receiving server's own
-// hostname — as the reporting identity.
-func Verify(authServID string, clientIP net.IP, helo, mailFrom string, rawMessage []byte) string {
+// Result is the outcome of verifying one inbound message.
+type Result struct {
+	// AuthenticationResults is the formatted header value (RFC 8601),
+	// without the header name or trailing CRLF.
+	AuthenticationResults string
+
+	// ShouldQuarantine is true only when DMARC was evaluated against a
+	// found policy record, failed outright, and that record (or the
+	// applicable subdomain policy — see lookupDMARCRecord) actually
+	// requests action ("quarantine" or "reject"). A sending domain
+	// publishing "p=none" is explicitly asking receivers not to act on
+	// failures (typically because it's still rolling DMARC out), so a
+	// "none" policy is honored here rather than quarantining anyway —
+	// same for "none"/temperror/permerror verdicts, which reached no
+	// definitive failure at all.
+	ShouldQuarantine bool
+}
+
+// Verify runs SPF, DKIM, and DMARC checks on an inbound message.
+// authServID is normally the receiving server's own hostname, used as the
+// Authentication-Results reporting identity.
+func Verify(authServID string, clientIP net.IP, helo, mailFrom string, rawMessage []byte) Result {
 	var results []authres.Result
 
 	spfResult, spfDomain := checkSPF(clientIP, helo, mailFrom)
@@ -58,15 +77,22 @@ func Verify(authServID string, clientIP net.IP, helo, mailFrom string, rawMessag
 	}
 	results = append(results, dkimResults...)
 
+	dmarcCtx, dmarcCancel := context.WithTimeout(context.Background(), dnsTimeout)
+	defer dmarcCancel()
+
 	fromDomain := extractFromDomain(rawMessage)
-	if dmarcResult := checkDMARC(fromDomain, spfResult, spfDomain, dkimResults); dmarcResult != nil {
+	dmarcResult, shouldQuarantine := checkDMARC(boundedLookupTXT(dmarcCtx), fromDomain, spfResult, spfDomain, dkimResults)
+	if dmarcResult != nil {
 		if dr, ok := dmarcResult.(*authres.DMARCResult); ok {
 			metrics.InboundAuthResults.WithLabelValues("dmarc", string(dr.Value)).Inc()
 		}
 		results = append(results, dmarcResult)
 	}
 
-	return authres.Format(authServID, results)
+	return Result{
+		AuthenticationResults: authres.Format(authServID, results),
+		ShouldQuarantine:      shouldQuarantine,
+	}
 }
 
 func checkSPF(clientIP net.IP, helo, mailFrom string) (spf.Result, string) {
@@ -125,24 +151,26 @@ func checkDKIM(rawMessage []byte) []authres.Result {
 	return results
 }
 
-func checkDMARC(fromDomain string, spfResult spf.Result, spfDomain string, dkimResults []authres.Result) authres.Result {
+// checkDMARC returns the Authentication-Results DMARC entry and whether
+// the sending domain's own policy actually asks receivers to act on a
+// failure. lookupTXT is injectable so tests can supply canned DNS
+// responses instead of hitting real nameservers (see checkDKIM/dkim.Verify
+// for the same pattern).
+func checkDMARC(lookupTXT func(domain string) ([]string, error), fromDomain string, spfResult spf.Result, spfDomain string, dkimResults []authres.Result) (result authres.Result, shouldQuarantine bool) {
 	if fromDomain == "" {
-		return nil
+		return nil, false
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), dnsTimeout)
-	defer cancel()
-
-	record, err := dmarc.LookupWithOptions(fromDomain, &dmarc.LookupOptions{LookupTXT: boundedLookupTXT(ctx)})
+	record, policy, err := lookupDMARCRecord(lookupTXT, fromDomain)
 	if err != nil {
 		if err == dmarc.ErrNoPolicy {
-			return &authres.DMARCResult{Value: authres.ResultNone, From: fromDomain}
+			return &authres.DMARCResult{Value: authres.ResultNone, From: fromDomain}, false
 		}
 		value := authres.ResultValue(authres.ResultPermError)
 		if dmarc.IsTempFail(err) {
 			value = authres.ResultTempError
 		}
-		return &authres.DMARCResult{Value: value, From: fromDomain, Reason: err.Error()}
+		return &authres.DMARCResult{Value: value, From: fromDomain, Reason: err.Error()}, false
 	}
 
 	spfAligned := spfResult == spf.Pass && aligned(fromDomain, spfDomain, record.SPFAlignment)
@@ -160,9 +188,52 @@ func checkDMARC(fromDomain string, spfResult spf.Result, spfDomain string, dkimR
 	}
 
 	if spfAligned || dkimAligned {
-		return &authres.DMARCResult{Value: authres.ResultPass, From: fromDomain}
+		return &authres.DMARCResult{Value: authres.ResultPass, From: fromDomain}, false
 	}
-	return &authres.DMARCResult{Value: authres.ResultFail, From: fromDomain}
+
+	failResult := &authres.DMARCResult{Value: authres.ResultFail, From: fromDomain}
+	return failResult, policy == dmarc.PolicyQuarantine || policy == dmarc.PolicyReject
+}
+
+// lookupDMARCRecord implements RFC 7489 §6.6.3's discovery algorithm: try
+// fromDomain's own _dmarc TXT record; if it publishes none, walk up one
+// label at a time until the organizational domain (inclusive) and use the
+// first record found there instead. When the record actually used was
+// found above fromDomain itself, its subdomain policy ("sp=") is what
+// applies — falling back to the top-level policy if sp= wasn't set, per
+// spec — since that's what the publishing domain intended for exactly
+// this situation (a subdomain with no DMARC record of its own).
+func lookupDMARCRecord(lookupTXT func(domain string) ([]string, error), fromDomain string) (record *dmarc.Record, policy dmarc.Policy, err error) {
+	fromDomain = strings.ToLower(fromDomain)
+
+	orgDomain, orgErr := publicsuffix.EffectiveTLDPlusOne(fromDomain)
+	if orgErr != nil {
+		orgDomain = fromDomain
+	}
+
+	domain := fromDomain
+	for {
+		record, err = dmarc.LookupWithOptions(domain, &dmarc.LookupOptions{LookupTXT: lookupTXT})
+		if err == nil {
+			policy = record.Policy
+			if domain != fromDomain && record.SubdomainPolicy != "" {
+				policy = record.SubdomainPolicy
+			}
+			return record, policy, nil
+		}
+		if err != dmarc.ErrNoPolicy {
+			return nil, "", err
+		}
+		if domain == orgDomain {
+			return nil, "", dmarc.ErrNoPolicy
+		}
+
+		_, rest, ok := strings.Cut(domain, ".")
+		if !ok {
+			return nil, "", dmarc.ErrNoPolicy
+		}
+		domain = rest
+	}
 }
 
 // aligned reports whether otherDomain is DMARC-aligned with fromDomain

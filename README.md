@@ -39,8 +39,10 @@ for the webmail UI — no custom crypto, TLS, or protocol parsing.
   when ports 80/443 belong to a reverse proxy in front of this host.
 - **Inbound verification**: SPF, DKIM, and DMARC are checked on every
   inbound message (not submission — that's already authenticated) and the
-  result is surfaced as an `Authentication-Results` header; nothing is
-  rejected based on it, this phase only annotates.
+  result is surfaced as an `Authentication-Results` header. Nothing is
+  ever rejected based on it, but a message that fails DMARC against a
+  sending domain publishing `p=quarantine`/`p=reject` is routed to Junk
+  instead of INBOX — see "Hardening" below.
 - **Brute-force protection**: failed-attempt rate limiting on SMTP AUTH,
   IMAP LOGIN, and webmail login, each with its own limiter. Real-client-IP
   resolution is reverse-proxy-aware: an address or header is only trusted
@@ -337,11 +339,22 @@ Authentication-Results: mail.example.com; spf=pass smtp.mailfrom=sender.example;
  dkim=pass header.d=sender.example; dmarc=pass header.from=sender.example
 ```
 
-This is verification, not enforcement — nothing is rejected based on the
-result. DMARC alignment uses `golang.org/x/net/publicsuffix` for the
+Nothing is ever rejected outright based on the result, but a message that
+fails DMARC is routed to **Junk instead of INBOX** — and only when the
+sending domain's own DMARC record actually asks for that: `p=quarantine`
+or `p=reject`. A domain publishing `p=none` (common while a domain is
+still rolling DMARC out) is honored as "report, don't act," so its failing
+mail still lands in INBOX. Passing DMARC always goes to INBOX regardless
+of policy.
+
+DMARC alignment uses `golang.org/x/net/publicsuffix` for the
 organizational-domain comparison relaxed alignment requires, so it's
 correct for domains under multi-label public suffixes (e.g. `.co.uk`), not
-just naive suffix matching.
+just naive suffix matching. Policy discovery also implements RFC 7489
+§6.6.3's subdomain fallback: if `mail.example.com` publishes no DMARC
+record of its own, `example.com`'s record is used instead, applying its
+subdomain policy (`sp=`) rather than its top-level policy (`p=`) when the
+two differ.
 
 ### Brute-force protection and reverse-proxy awareness
 

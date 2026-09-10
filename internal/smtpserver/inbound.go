@@ -81,25 +81,34 @@ func (s *inboundSession) Data(r io.Reader) error {
 		return fmt.Errorf("reading message body: %w", err)
 	}
 
-	authResults := inboundauth.Verify(s.backend.Config.Hostname, s.clientIP(), s.helo(), s.from, body)
+	verifyResult := inboundauth.Verify(s.backend.Config.Hostname, s.clientIP(), s.helo(), s.from, body)
+
+	folder := "INBOX"
+	if verifyResult.ShouldQuarantine {
+		folder = "Junk"
+	}
 
 	for _, rcpt := range s.rcpts {
 		local, domain, _ := address.Split(rcpt)
 
 		var full []byte
 		full = append(full, []byte(s.receivedHeader(rcpt))...)
-		full = append(full, []byte(fmt.Sprintf("Authentication-Results: %s\r\n", authResults))...)
+		full = append(full, []byte(fmt.Sprintf("Authentication-Results: %s\r\n", verifyResult.AuthenticationResults))...)
 		full = append(full, body...)
 
 		root := maildir.UserRoot(s.backend.Config.Storage.MaildirPath, domain, local)
-		md := maildir.New(maildir.FolderPath(root, "INBOX"))
+		md := maildir.New(maildir.FolderPath(root, folder))
 		if _, err := md.Deliver(full); err != nil {
-			s.backend.Logger.Error("maildir delivery failed", "recipient", rcpt, "error", err)
+			s.backend.Logger.Error("maildir delivery failed", "recipient", rcpt, "folder", folder, "error", err)
 			metrics.SMTPMessages.WithLabelValues("inbound", "delivery_failed").Inc()
 			return &smtp.SMTPError{Code: 451, EnhancedCode: smtp.EnhancedCode{4, 3, 0}, Message: "Temporary delivery failure, please retry"}
 		}
-		s.backend.Logger.Info("delivered inbound message", "from", s.from, "to", rcpt, "bytes", len(full))
-		metrics.SMTPMessages.WithLabelValues("inbound", "accepted").Inc()
+		s.backend.Logger.Info("delivered inbound message", "from", s.from, "to", rcpt, "folder", folder, "bytes", len(full))
+		if verifyResult.ShouldQuarantine {
+			metrics.SMTPMessages.WithLabelValues("inbound", "quarantined").Inc()
+		} else {
+			metrics.SMTPMessages.WithLabelValues("inbound", "accepted").Inc()
+		}
 	}
 
 	return nil
