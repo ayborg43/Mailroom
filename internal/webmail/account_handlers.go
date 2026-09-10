@@ -1,6 +1,7 @@
 package webmail
 
 import (
+	"net"
 	"net/http"
 
 	"github.com/sociolytik/mailserver/internal/imapbackend"
@@ -10,10 +11,40 @@ type accountData struct {
 	Email   string
 	IsAdmin bool
 	Error   string
+
+	// Connection settings for configuring a mail client (Thunderbird,
+	// Outlook, Apple Mail) or any app that sends mail via authenticated
+	// SMTP submission — same host/ports for every account, just shown
+	// here so a user doesn't need to go ask an admin for them.
+	Hostname string
+	IMAPPort string
+	SMTPPort string
+}
+
+func (s *Server) newAccountData(account *imapbackend.Account) accountData {
+	return accountData{
+		Email:    account.Email(),
+		IsAdmin:  account.IsAdmin(),
+		Hostname: s.Hostname,
+		IMAPPort: portFromAddr(s.Backend.Config.Listen.IMAP),
+		SMTPPort: portFromAddr(s.Backend.Config.Listen.Submission),
+	}
+}
+
+// portFromAddr extracts the port from a listen address like ":993" or
+// "0.0.0.0:587" — what a mail client needs is the bare port number to pair
+// with the server's public hostname, not whatever local bind address the
+// server happens to listen on.
+func portFromAddr(addr string) string {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	return port
 }
 
 func (s *Server) handleAccountPage(w http.ResponseWriter, r *http.Request, account *imapbackend.Account) {
-	render(w, "account_page", accountData{Email: account.Email(), IsAdmin: account.IsAdmin()})
+	render(w, "account_page", s.newAccountData(account))
 }
 
 func (s *Server) handleAccountPasswordChange(w http.ResponseWriter, r *http.Request, account *imapbackend.Account) {
@@ -25,7 +56,7 @@ func (s *Server) handleAccountPasswordChange(w http.ResponseWriter, r *http.Requ
 	newPassword := r.FormValue("new_password")
 	confirm := r.FormValue("confirm_password")
 
-	data := accountData{Email: account.Email(), IsAdmin: account.IsAdmin()}
+	data := s.newAccountData(account)
 
 	switch {
 	case current == "" || newPassword == "":

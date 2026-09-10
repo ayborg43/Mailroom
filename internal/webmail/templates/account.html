@@ -32,6 +32,36 @@
       </div>
       <button type="submit" class="btn btn-primary">Change password</button>
     </form>
+
+    <h2>Mail client &amp; app settings</h2>
+    <p class="field-hint">
+      Use these to add this mailbox to Thunderbird, Outlook, Apple Mail,
+      or any app that sends mail via SMTP &mdash; the username and
+      password are the same as this webmail login.
+    </p>
+    <div class="table-scroll">
+      <table class="admin-table">
+        <thead>
+          <tr><th></th><th>Host</th><th>Port</th><th>Security</th><th>Username</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>IMAP (incoming)</td>
+            <td>{{.Hostname}}</td>
+            <td>{{.IMAPPort}}</td>
+            <td>SSL/TLS</td>
+            <td>{{.Email}}</td>
+          </tr>
+          <tr>
+            <td>SMTP (outgoing)</td>
+            <td>{{.Hostname}}</td>
+            <td>{{.SMTPPort}}</td>
+            <td>STARTTLS</td>
+            <td>{{.Email}}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </body>
 </html>
