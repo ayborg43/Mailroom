@@ -170,6 +170,7 @@ a:hover { text-decoration: underline; }
    flex-basis resolves from that 100% width and stretches across the row,
    shoving the label text out to the far edge. */
 .checkbox-field input[type="checkbox"] { width: auto; flex: 0 0 auto; }
+.field-hint { color: var(--text-dim); font-size: 13px; margin: 6px 0 0; max-width: 60ch; }
 
 /* ---- Account ---- */
 .account-page { padding: 24px; max-width: 420px; }

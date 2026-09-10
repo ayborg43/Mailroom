@@ -44,6 +44,13 @@ type Queue struct {
 	// were exhausted. Typically used to bounce the message back to the
 	// original sender's own mailbox.
 	OnPermanentFailure func(item Item, data []byte, reason string)
+
+	// SmartHost is called (if set) before every delivery attempt to check
+	// whether outbound mail should go through a configured relay instead
+	// of direct-to-MX. Queried live rather than cached, so an admin
+	// enabling/disabling it takes effect on the next delivery attempt
+	// without a restart.
+	SmartHost func(ctx context.Context) (cfg *SmartHostConfig, enabled bool, err error)
 }
 
 func New(dir, hostname string, retryIntervals []time.Duration, maxRetries int, logger *slog.Logger) (*Queue, error) {

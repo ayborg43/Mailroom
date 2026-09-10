@@ -194,6 +194,16 @@ func cmdServe(args []string) {
 			logger.Error("bouncing undeliverable message", "to", item.To, "from", item.From, "error", err)
 		}
 	}
+	mailQueue.SmartHost = func(ctx context.Context) (*queue.SmartHostConfig, bool, error) {
+		rs, err := db.GetRelaySettings(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+		if !rs.Enabled {
+			return nil, false, nil
+		}
+		return &queue.SmartHostConfig{Host: rs.Host, Port: rs.Port, Username: rs.Username, Password: rs.Password}, true, nil
+	}
 	go mailQueue.Run(ctx, 30*time.Second)
 
 	dkimKey, generated, err := dkimsign.LoadOrGenerateKey(cfg.DKIM.PrivateKeyPath)

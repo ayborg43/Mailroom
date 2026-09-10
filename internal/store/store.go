@@ -86,9 +86,9 @@ func (s *Store) Ping(ctx context.Context) error {
 }
 
 func (s *Store) migrate(ctx context.Context) error {
-	schema := schemaSQLite + mailboxSchemaSQLite
+	schema := schemaSQLite + mailboxSchemaSQLite + relaySettingsSchemaSQLite
 	if s.driver == "postgres" {
-		schema = schemaPostgres + mailboxSchemaPostgres
+		schema = schemaPostgres + mailboxSchemaPostgres + relaySettingsSchemaPostgres
 	}
 	_, err := s.db.ExecContext(ctx, schema)
 	return err

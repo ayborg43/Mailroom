@@ -291,6 +291,39 @@ and uncomment the `postgres` service and `depends_on` block in
 `docker-compose.yml`. Schema migrations run automatically on startup either
 way.
 
+## Outbound relay via a smart host (Brevo, etc.)
+
+A fresh VPS IP has no sending reputation, and major providers (Gmail,
+Outlook, Yahoo) will often silently spam-box or reject mail from it
+regardless of correct SPF/DKIM/DMARC. Routing outbound mail through an
+established relay's IPs instead of delivering directly to each recipient's
+MX sidesteps that. The mechanism is plain authenticated SMTP — identical
+for Brevo, Postmark, SES, Mailgun, or any other provider; nothing here is
+Brevo-specific.
+
+Configure it from the webmail **Admin** page (any admin account →
+`/admin` → "Outbound relay"):
+
+- **Host**: e.g. `smtp-relay.brevo.com`
+- **Port**: `587` (STARTTLS; this is the only mode supported — implicit-TLS
+  ports like 465 aren't)
+- **Username** / **Password**: your provider's SMTP credentials (for
+  Brevo: your account email + an SMTP key, not your login password)
+
+Toggling "Enable outbound relay" takes effect on the *next* delivery
+attempt — no restart needed. While enabled, **every** non-local outbound
+message routes through it exclusively (no direct-MX fallback); disabling
+it reverts to direct-to-MX delivery for everything. The connection's
+certificate is fully verified (unlike the opportunistic, unverified TLS
+used for direct-to-MX delivery) since real credentials go over it — a
+misconfigured host/port will fail loudly rather than silently downgrading
+to an unencrypted, credential-leaking connection.
+
+The credential is stored in the database in plaintext (it must be
+recoverable as-is to authenticate, unlike user login passwords, which are
+bcrypt-hashed since they only ever need verifying) — keep database access
+as tightly scoped as you would `config.yaml`'s own secrets.
+
 ## Hardening
 
 ### Inbound SPF/DKIM/DMARC verification

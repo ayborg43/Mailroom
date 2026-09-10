@@ -53,6 +53,37 @@
       </div>
       <button type="submit" class="btn btn-primary">Create mailbox</button>
     </form>
+
+    <h2>Outbound relay</h2>
+    <p class="field-hint">
+      Route outbound mail through an authenticated SMTP relay (Brevo,
+      Postmark, SES, Mailgun, ...) instead of delivering directly to each
+      recipient's mail server. Improves deliverability for a sending IP
+      with no reputation of its own. The password field is left blank
+      here for display &mdash; enter one only when setting it or changing it.
+    </p>
+    <form method="post" action="/admin/relay" class="admin-form">
+      <div class="field checkbox-field">
+        <label><input type="checkbox" name="relay_enabled" {{if .Relay.Enabled}}checked{{end}}> Enable outbound relay</label>
+      </div>
+      <div class="field">
+        <label for="relay_host">SMTP host</label>
+        <input type="text" id="relay_host" name="relay_host" placeholder="smtp-relay.brevo.com" value="{{.Relay.Host}}">
+      </div>
+      <div class="field">
+        <label for="relay_port">Port</label>
+        <input type="number" id="relay_port" name="relay_port" min="1" max="65535" value="{{.Relay.Port}}">
+      </div>
+      <div class="field">
+        <label for="relay_username">Username</label>
+        <input type="text" id="relay_username" name="relay_username" placeholder="your Brevo login email" value="{{.Relay.Username}}">
+      </div>
+      <div class="field">
+        <label for="relay_password">Password / API key</label>
+        <input type="password" id="relay_password" name="relay_password" placeholder="leave blank to keep unchanged" autocomplete="new-password">
+      </div>
+      <button type="submit" class="btn btn-primary">Save relay settings</button>
+    </form>
   </div>
 </body>
 </html>

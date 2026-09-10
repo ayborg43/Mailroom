@@ -10,6 +10,7 @@ import (
 	"github.com/sociolytik/mailserver/internal/address"
 	"github.com/sociolytik/mailserver/internal/imapbackend"
 	"github.com/sociolytik/mailserver/internal/maildir"
+	"github.com/sociolytik/mailserver/internal/store"
 )
 
 // adminUserRow is one row of the mailbox directory shown on the Admin page.
@@ -19,10 +20,22 @@ type adminUserRow struct {
 	IsAdmin bool
 }
 
+// relayView is what the admin page shows/edits for the outbound smart
+// host. It deliberately excludes the stored password — the form's
+// password field is always blank on load (see handleAdminRelaySettings),
+// so the secret is never echoed back into rendered HTML.
+type relayView struct {
+	Enabled  bool
+	Host     string
+	Port     int
+	Username string
+}
+
 type adminData struct {
 	Email   string // the signed-in account's own email, for the sidebar footer
-	IsAdmin bool    // always true to reach this page, but templates share the sidebar
+	IsAdmin bool   // always true to reach this page, but templates share the sidebar
 	Users   []adminUserRow
+	Relay   relayView
 	Error   string
 	Success string
 }
@@ -48,7 +61,18 @@ func (s *Server) buildAdminData(r *http.Request, account *imapbackend.Account) (
 	for i, u := range users {
 		rows[i] = adminUserRow{ID: u.ID, Email: u.Email, IsAdmin: u.IsAdmin}
 	}
-	return &adminData{Email: account.Email(), IsAdmin: true, Users: rows}, nil
+
+	rs, err := s.Backend.Store.GetRelaySettings(r.Context())
+	if err != nil {
+		return nil, fmt.Errorf("loading relay settings: %w", err)
+	}
+
+	return &adminData{
+		Email:   account.Email(),
+		IsAdmin: true,
+		Users:   rows,
+		Relay:   relayView{Enabled: rs.Enabled, Host: rs.Host, Port: rs.Port, Username: rs.Username},
+	}, nil
 }
 
 func (s *Server) handleAdminPage(w http.ResponseWriter, r *http.Request, account *imapbackend.Account) {
@@ -163,4 +187,66 @@ func (s *Server) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request, a
 	}
 
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
+// handleAdminRelaySettings saves the outbound smart-host configuration
+// (Brevo, or any other authenticated SMTP relay — the form works
+// identically regardless of provider). Leaving the password field blank
+// keeps whatever's already stored, since the form never echoes it back.
+func (s *Server) handleAdminRelaySettings(w http.ResponseWriter, r *http.Request, account *imapbackend.Account) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	data, err := s.buildAdminData(r, account)
+	if err != nil {
+		s.Logger.Error("building admin page", "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	enabled := r.FormValue("relay_enabled") == "on"
+	host := strings.TrimSpace(r.FormValue("relay_host"))
+	username := strings.TrimSpace(r.FormValue("relay_username"))
+	password := r.FormValue("relay_password")
+	port := 587
+	if p := strings.TrimSpace(r.FormValue("relay_port")); p != "" {
+		if n, err := strconv.Atoi(p); err == nil && n > 0 && n < 65536 {
+			port = n
+		} else {
+			data.Error = "Port must be a number between 1 and 65535"
+			data.Relay = relayView{Enabled: enabled, Host: host, Port: port, Username: username}
+			render(w, "admin_page", data)
+			return
+		}
+	}
+
+	if enabled && (host == "" || username == "") {
+		data.Error = "Host and username are required to enable the relay"
+		data.Relay = relayView{Enabled: enabled, Host: host, Port: port, Username: username}
+		render(w, "admin_page", data)
+		return
+	}
+
+	err = s.Backend.Store.SetRelaySettings(r.Context(), store.RelaySettings{
+		Enabled: enabled, Host: host, Port: port, Username: username, Password: password,
+	})
+	if err != nil {
+		s.Logger.Error("saving relay settings", "error", err)
+		data.Error = "Failed to save relay settings: " + err.Error()
+		render(w, "admin_page", data)
+		return
+	}
+
+	refreshed, err := s.buildAdminData(r, account)
+	if err == nil {
+		data = refreshed
+	}
+	if enabled {
+		data.Success = "Outbound relay saved and enabled. New mail will route through it starting with the next delivery attempt."
+	} else {
+		data.Success = "Outbound relay saved and disabled. Mail will deliver directly to each recipient's mail server again."
+	}
+	render(w, "admin_page", data)
 }
