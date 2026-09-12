@@ -34,7 +34,8 @@
   </div>
   {{end}}
   {{if .Selected.HTMLBody}}
-  <iframe class="html-body" sandbox="" srcdoc="{{.Selected.HTMLBody}}"></iframe>
+  <iframe class="html-body" sandbox="allow-same-origin" srcdoc="{{.Selected.HTMLBody}}"
+    onload="this.style.height = Math.min(this.contentWindow.document.documentElement.scrollHeight + 16, 8000) + 'px';"></iframe>
   {{else}}
   <div class="message-body">{{.Selected.TextBody}}</div>
   {{end}}
