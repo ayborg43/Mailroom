@@ -66,6 +66,7 @@ func New(backend *imapbackend.Backend, sender *mailsend.Sender, hostname string,
 
 	mux.HandleFunc("GET /account", s.requireAuth(s.handleAccountPage))
 	mux.HandleFunc("POST /account/password", s.requireAuth(s.handleAccountPasswordChange))
+	mux.HandleFunc("POST /account/forwarding", s.requireAuth(s.handleAccountForwarding))
 
 	s.mux = mux
 	return s

@@ -205,6 +205,7 @@ func cmdServe(args []string) {
 		return &queue.SmartHostConfig{Host: rs.Host, Port: rs.Port, Username: rs.Username, Password: rs.Password}, true, nil
 	}
 	go mailQueue.Run(ctx, 30*time.Second)
+	inboundBackend.Queue = mailQueue
 
 	dkimKey, generated, err := dkimsign.LoadOrGenerateKey(cfg.DKIM.PrivateKeyPath)
 	if err != nil {

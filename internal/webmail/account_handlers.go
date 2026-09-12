@@ -1,8 +1,11 @@
 package webmail
 
 import (
+	"context"
 	"net"
 	"net/http"
+	"net/mail"
+	"strings"
 
 	"github.com/sociolytik/mailserver/internal/imapbackend"
 )
@@ -11,6 +14,7 @@ type accountData struct {
 	Email   string
 	IsAdmin bool
 	Error   string
+	Success string
 
 	// Connection settings for configuring a mail client (Thunderbird,
 	// Outlook, Apple Mail) or any app that sends mail via authenticated
@@ -19,16 +23,27 @@ type accountData struct {
 	Hostname string
 	IMAPPort string
 	SMTPPort string
+
+	// Forwarding is this mailbox's own copy-to-another-address rule.
+	ForwardingEnabled bool
+	ForwardTo         string
 }
 
-func (s *Server) newAccountData(account *imapbackend.Account) accountData {
-	return accountData{
+func (s *Server) newAccountData(ctx context.Context, account *imapbackend.Account) accountData {
+	data := accountData{
 		Email:    account.Email(),
 		IsAdmin:  account.IsAdmin(),
 		Hostname: s.Hostname,
 		IMAPPort: portFromAddr(s.Backend.Config.Listen.IMAP),
 		SMTPPort: portFromAddr(s.Backend.Config.Listen.Submission),
 	}
+
+	if f, err := s.Backend.Store.GetForwarding(ctx, account.ID()); err == nil {
+		data.ForwardingEnabled = f.Enabled
+		data.ForwardTo = f.ForwardTo
+	}
+
+	return data
 }
 
 // portFromAddr extracts the port from a listen address like ":993" or
@@ -44,7 +59,7 @@ func portFromAddr(addr string) string {
 }
 
 func (s *Server) handleAccountPage(w http.ResponseWriter, r *http.Request, account *imapbackend.Account) {
-	render(w, "account_page", s.newAccountData(account))
+	render(w, "account_page", s.newAccountData(r.Context(), account))
 }
 
 func (s *Server) handleAccountPasswordChange(w http.ResponseWriter, r *http.Request, account *imapbackend.Account) {
@@ -56,7 +71,7 @@ func (s *Server) handleAccountPasswordChange(w http.ResponseWriter, r *http.Requ
 	newPassword := r.FormValue("new_password")
 	confirm := r.FormValue("confirm_password")
 
-	data := s.newAccountData(account)
+	data := s.newAccountData(r.Context(), account)
 
 	switch {
 	case current == "" || newPassword == "":
@@ -85,4 +100,44 @@ func (s *Server) handleAccountPasswordChange(w http.ResponseWriter, r *http.Requ
 	}
 
 	render(w, "account_page", data)
+}
+
+// handleAccountForwarding lets a user configure their own mailbox to copy
+// every incoming message to another address, local or external. The
+// original always stays in this mailbox too — see mailForward in
+// internal/smtpserver/inbound.go for why forwarding never replaces local
+// delivery.
+func (s *Server) handleAccountForwarding(w http.ResponseWriter, r *http.Request, account *imapbackend.Account) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+	enabled := r.FormValue("forwarding_enabled") == "on"
+	forwardTo := strings.ToLower(strings.TrimSpace(r.FormValue("forward_to")))
+
+	data := s.newAccountData(r.Context(), account)
+	data.ForwardingEnabled = enabled
+	data.ForwardTo = forwardTo
+
+	switch {
+	case enabled && forwardTo == "":
+		data.Error = "Enter an address to forward mail to"
+	case enabled && !validEmailAddress(forwardTo):
+		data.Error = "That doesn't look like a valid email address"
+	case enabled && forwardTo == strings.ToLower(account.Email()):
+		data.Error = "Can't forward a mailbox to itself"
+	default:
+		if err := s.Backend.Store.SetForwarding(r.Context(), account.ID(), enabled, forwardTo); err != nil {
+			data.Error = "Failed to save forwarding settings: " + err.Error()
+			break
+		}
+		data.Success = "Forwarding settings saved"
+	}
+
+	render(w, "account_page", data)
+}
+
+func validEmailAddress(addr string) bool {
+	_, err := mail.ParseAddress(addr)
+	return err == nil
 }

@@ -44,6 +44,10 @@ func (b *Backend) Authenticate(ctx context.Context, email, password string) (*Ac
 
 func (a *Account) Email() string { return a.user.dbUser.Email }
 
+// ID returns the account's numeric user ID, for store lookups (forwarding
+// rules, etc.) keyed by user rather than by email.
+func (a *Account) ID() int64 { return a.user.dbUser.ID }
+
 // IsAdmin reports whether this account has administrative privileges
 // (mailbox management, via the webmail Admin page).
 func (a *Account) IsAdmin() bool { return a.user.dbUser.IsAdmin }

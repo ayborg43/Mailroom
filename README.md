@@ -326,6 +326,32 @@ recoverable as-is to authenticate, unlike user login passwords, which are
 bcrypt-hashed since they only ever need verifying) — keep database access
 as tightly scoped as you would `config.yaml`'s own secrets.
 
+## Mail forwarding
+
+Any user can configure their own mailbox (webmail → **Account** → "Forwarding")
+to copy every incoming message to another address — local or external. The
+original always stays in the mailbox too; forwarding never replaces local
+delivery, so a failed or misconfigured forward can't lose mail.
+
+- **Forwarding to another local mailbox** delivers the copy directly into
+  that mailbox's INBOX. It's single-hop by design: the copy is not itself
+  re-checked against its recipient's own forwarding rule, so two mailboxes
+  configured to forward to each other can't loop.
+- **Forwarding to an external address** hands the message to the same
+  outbound queue authenticated users' own sent mail goes through (direct-to-MX,
+  or via the smart host above if one is configured). The envelope sender
+  for that hop is rewritten to the receiving mailbox's own address (e.g.
+  `alice@yourdomain.com`) rather than kept as the original external sender —
+  otherwise you'd be asserting to the next hop that you're authorized to
+  send for a domain you have no SPF/DKIM relationship with, which is what
+  makes naive mail forwarding land in spam. The message headers and body,
+  including the original `From:`, are relayed unmodified — there's no ARC
+  (Authenticated Received Chain) sealing, so whether the *original* sender's
+  domain still evaluates as DMARC-aligned at the final destination depends
+  on its own DKIM signature surviving the hop unmodified (which it does
+  here). That's sufficient for personal forwarding; it's not the same
+  guarantee enterprise-grade forwarding services provide.
+
 ## Hardening
 
 ### Inbound SPF/DKIM/DMARC verification
