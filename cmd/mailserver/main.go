@@ -387,7 +387,13 @@ func setupTLS(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*tl
 	}
 
 	if cfg.TLS.ACME.Enabled {
-		mgr, err := acmedns.New(cfg.TLS.ACME, cfg.Domains, logger)
+		// The certificate must cover cfg.Hostname — the FQDN mail clients and
+		// other MTAs actually validate the IMAP/SMTP TLS connection against
+		// (see its doc comment) — not cfg.Domains, which is the separate list
+		// of mail domains this server accepts addresses for and is usually a
+		// different name (e.g. hostname "mail.example.com" vs. domain
+		// "example.com").
+		mgr, err := acmedns.New(cfg.TLS.ACME, []string{cfg.Hostname}, logger)
 		if err != nil {
 			return nil, fmt.Errorf("configuring ACME: %w", err)
 		}

@@ -233,3 +233,41 @@ func TestAccountAppend(t *testing.T) {
 		t.Fatalf("appended message = %+v", msgs[0])
 	}
 }
+
+// A mailbox deleted and recreated from the CLI while the server keeps
+// running must not reuse the old user's cached folders, whose rows are gone.
+func TestAuthenticateAfterUserRecreated(t *testing.T) {
+	backend, old := newTestBackend(t)
+	ctx := context.Background()
+
+	acct, err := backend.Authenticate(ctx, "alice@example.com", "password123")
+	if err != nil {
+		t.Fatalf("Authenticate: %v", err)
+	}
+	if _, err := acct.Folders(ctx); err != nil {
+		t.Fatalf("Folders: %v", err)
+	}
+
+	if err := backend.Store.DeleteUser(ctx, old.ID); err != nil {
+		t.Fatalf("DeleteUser: %v", err)
+	}
+	fresh, err := backend.Store.CreateUser(ctx, "example.com", "alice", "password123", false)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := ProvisionMailboxes(ctx, backend.Config, backend.Store, fresh); err != nil {
+		t.Fatalf("ProvisionMailboxes: %v", err)
+	}
+
+	acct, err = backend.Authenticate(ctx, "alice@example.com", "password123")
+	if err != nil {
+		t.Fatalf("Authenticate after recreate: %v", err)
+	}
+	raw := []byte("From: alice@example.com\r\nTo: bob@other.example\r\nSubject: after recreate\r\n\r\nbody\r\n")
+	if _, err := acct.Append("Sent", raw, []string{`\Seen`}); err != nil {
+		t.Fatalf("Append after recreate: %v", err)
+	}
+	if _, total, err := acct.ListMessages("Sent", 1, 10); err != nil || total != 1 {
+		t.Fatalf("ListMessages(Sent) after recreate: err=%v total=%d", err, total)
+	}
+}

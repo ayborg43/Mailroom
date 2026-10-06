@@ -55,7 +55,11 @@ func (b *Backend) userFor(dbUser *store.User) *User {
 	defer b.mu.Unlock()
 
 	email := strings.ToLower(dbUser.Email)
-	if u, ok := b.users[email]; ok {
+	// A cached entry whose ID differs from the live record belongs to a
+	// mailbox that was deleted and recreated (e.g. `mailserver user
+	// delete/create` run against a live server). Its cached folders point at
+	// rows that no longer exist, so start over rather than reuse it.
+	if u, ok := b.users[email]; ok && u.dbUser.ID == dbUser.ID {
 		return u
 	}
 	u := newUser(b, dbUser)
