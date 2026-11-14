@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	netmail "net/mail"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,35 @@ type composeData struct {
 	To, Cc, Subject, Body string
 	InReplyTo, References string
 	Error                 string
+	Folder                string // folder the reply/forward original lives in; where Cancel returns to
+	Mode                  string // "reply", "replyall", "forward" or "" for a new message
+}
+
+// CancelHref is where the Cancel button goes: back to the folder the user
+// came from, or the inbox for a fresh message.
+func (d *composeData) CancelHref() string {
+	if d.Folder == "" {
+		return "/mail/INBOX"
+	}
+	return "/mail/" + url.PathEscape(d.Folder)
+}
+
+// IslandProps is the JSON the compose island mounts with (see
+// web/src/islands/compose.tsx). The same fields also render the plain HTML
+// form that works without JavaScript.
+func (d *composeData) IslandProps() map[string]string {
+	return map[string]string{
+		"to":         d.To,
+		"cc":         d.Cc,
+		"subject":    d.Subject,
+		"body":       d.Body,
+		"inReplyTo":  d.InReplyTo,
+		"references": d.References,
+		"error":      d.Error,
+		"cancelHref": d.CancelHref(),
+		"folder":     d.Folder,
+		"mode":       d.Mode,
+	}
 }
 
 func (s *Server) handleComposeForm(w http.ResponseWriter, r *http.Request, account *imapbackend.Account) {
@@ -45,6 +75,8 @@ func (s *Server) handleComposeForm(w http.ResponseWriter, r *http.Request, accou
 		if uid64, err := strconv.ParseUint(uidStr, 10, 32); err == nil {
 			if original, err := account.GetMessage(folder, uint32(uid64)); err == nil {
 				fillComposeDefaults(data, account.Email(), mode, original)
+				data.Folder = folder
+				data.Mode = mode
 			}
 		}
 	}
@@ -182,7 +214,10 @@ func (s *Server) handleComposeSubmit(w http.ResponseWriter, r *http.Request, acc
 	references := sanitizeHeaderValue(r.FormValue("references"))
 	body := r.FormValue("body")
 
-	data := &composeData{To: to, Cc: cc, Subject: subject, Body: body, InReplyTo: inReplyTo, References: references}
+	data := &composeData{To: to, Cc: cc, Subject: subject, Body: body, InReplyTo: inReplyTo, References: references,
+		// Round-tripped so a re-rendered form (after an error) still knows
+		// where Cancel goes and whether it's a reply.
+		Folder: r.FormValue("folder"), Mode: r.FormValue("mode")}
 
 	if to == "" {
 		data.Error = "At least one recipient is required"

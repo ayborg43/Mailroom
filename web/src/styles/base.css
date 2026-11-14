@@ -1,0 +1,113 @@
+* { box-sizing: border-box; }
+
+html, body { margin: 0; }
+
+body {
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-sm); }
+
+.icon { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+.btn:hover { background: var(--bg-alt); text-decoration: none; }
+.btn:disabled { opacity: 0.55; cursor: default; }
+.btn-primary { background: var(--accent-solid); border-color: var(--accent-solid); color: #fff; font-weight: 600; }
+.btn-primary:hover { background: var(--accent-solid-hover); }
+.btn-danger { color: var(--danger); }
+.btn-danger:hover { background: var(--danger-soft); }
+.btn-block { width: 100%; }
+.btn.htmx-request { opacity: 0.6; pointer-events: none; }
+
+/* ---- Messages ---- */
+.error-msg, .success-msg {
+  font-size: 13px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+}
+.error-msg { color: var(--danger); background: var(--danger-soft); }
+.success-msg { color: var(--success); background: var(--success-soft); }
+
+/* ---- Form fields ---- */
+.field { margin-bottom: 14px; }
+.field label { display: block; margin-bottom: 4px; color: var(--text-dim); font-size: 13px; }
+.field input, .field textarea, .field select, .list-toolbar input[type="search"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.field input:focus, .field textarea:focus, .field select:focus, .list-toolbar input[type="search"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+.checkbox-field label { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 14px; }
+/* Override .field input's width:100% (meant for text/password/email
+   inputs) — without it, this checkbox becomes a flex item whose
+   flex-basis resolves from that 100% width and stretches across the row,
+   shoving the label text out to the far edge. */
+.checkbox-field input[type="checkbox"] { width: auto; flex: 0 0 auto; }
+.field-hint { color: var(--text-dim); font-size: 13px; margin: 6px 0 0; max-width: 60ch; }
+
+/* ---- Standalone pages ---- */
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 16px;
+  background: var(--bg-alt);
+}
+.login-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  width: min(360px, 100%);
+  box-shadow: var(--shadow);
+}
+.login-box h1 { font-size: 20px; margin: 0 0 20px; }
+
+.admin-page { padding: 24px; max-width: 680px; }
+.account-page { padding: 24px; max-width: 440px; }
+.admin-page h1, .account-page h1 { font-size: 20px; }
+.admin-page h2, .account-page h2 { font-size: 15px; margin-top: 28px; }
+.account-email { color: var(--text-dim); font-size: 13px; }
+.table-scroll { overflow-x: auto; }
+.admin-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.admin-table th, .admin-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.admin-table th { color: var(--text-dim); font-weight: 600; }
+.admin-form { margin-top: 12px; }
+
+@media (max-width: 768px) {
+  .admin-page, .account-page { padding: 16px; }
+}

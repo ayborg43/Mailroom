@@ -201,6 +201,48 @@ behind Traefik's TLS termination. Login attempts are rate-limited per
 client IP (resolved via `X-Forwarded-For`, trusted only from
 `security.trusted_proxies` — see "Hardening" below).
 
+### Frontend (`web/`)
+
+The webmail pages are still rendered by Go (`html/template`), with htmx for
+partial updates. The CSS and browser-side JavaScript are built by
+[Vite](https://vite.dev) from `web/` into `internal/webmail/static/dist/`,
+which the binary embeds — deployment is still a single binary, and
+`docker build` runs the Vite build in its own stage, so you never need Node
+on the server.
+
+What lives in `web/src`:
+
+- `styles/` — design tokens (light and dark, following the OS setting) and
+  the stylesheets.
+- `lib/` — small vanilla-TypeScript modules: keyboard shortcuts (`?` lists
+  them), sizing of HTML-email frames, list selection state.
+- `islands/` — interactive components ([Preact](https://preactjs.com)) that
+  mount over a server-rendered element marked
+  `data-island="name" data-props='{…}'`. Today that's the compose form
+  (recipient chips, drag-and-drop attachments, draft autosave, Ctrl+Enter to
+  send). The server-rendered form inside the element is the no-JavaScript
+  fallback and posts to the same endpoint. Islands load on demand, so the
+  other pages never download Preact.
+
+Working on it:
+
+```sh
+cd web
+npm ci                # once
+npm run dev           # Vite dev server on :5173, hot-reloading CSS/TS
+npm test              # vitest (address parsing etc.)
+npm run build         # type-check + production build into static/dist
+```
+
+For live editing, start the Go server with `MAILSERVER_WEBMAIL_DEV=1` (it
+then emits Vite's dev-server tags instead of the built files), run
+`npm run dev`, and browse **http://localhost:5173** — Vite serves the modules
+and proxies everything else to the Go server (`MAILSERVER_URL`, default
+`http://localhost:8080`). Plain `go build` / `go test` need no Node: without a
+build the pages just render unstyled, and the server logs an error saying so.
+Run `npm run build` before `go build` if you want the real UI in a local
+binary.
+
 ## Deploying with Dokploy
 
 This repo works as a Dokploy "Compose" application — you point Dokploy at

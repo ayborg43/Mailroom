@@ -1,0 +1,47 @@
+/* Design tokens. Light by default; dark follows the OS setting. */
+:root {
+  color-scheme: light dark;
+
+  --bg: #ffffff;
+  --bg-alt: #f6f7f9;
+  --bg-sunken: #eceff3;
+  --border: #e1e4e8;
+  --border-strong: #c9ced6;
+  --text: #1b1f24;
+  --text-dim: #5c6670;
+  --accent: #1d5fd6;          /* links, focus rings, accents on text */
+  --accent-solid: #2563eb;    /* filled buttons (white text on top) */
+  --accent-solid-hover: #1d4ed8;
+  --accent-soft: #e8f0fe;     /* selected row, hover tint */
+  --danger: #cf222e;
+  --danger-soft: #ffebe9;
+  --success: #1a7f37;
+  --success-soft: #dafbe1;
+  --shadow: 0 8px 28px rgba(15, 23, 42, 0.16);
+
+  --radius: 8px;
+  --radius-sm: 6px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171b;
+    --bg-alt: #1a1e23;
+    --bg-sunken: #0f1215;
+    --border: #272d34;
+    --border-strong: #3a424c;
+    --text: #e6e9ed;
+    --text-dim: #98a2ae;
+    --accent: #7aa7ff;
+    --accent-solid: #3b6fe0;
+    --accent-solid-hover: #4b7cea;
+    --accent-soft: #1b2a47;
+    --danger: #ff7b72;
+    --danger-soft: #3a1d1f;
+    --success: #3fb950;
+    --success-soft: #12301b;
+    --shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  }
+}

@@ -7,3 +7,8 @@
 /mailserver
 /bin/
 /.claude/
+
+# Frontend build output (built by `npm run build` in web/, and by the
+# Dockerfile). internal/webmail/static/.gitkeep is tracked so the Go package
+# still has something to embed before the first frontend build.
+/internal/webmail/static/dist/

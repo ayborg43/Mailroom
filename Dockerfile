@@ -1,3 +1,14 @@
+# Stage 1: build the webmail frontend (Vite) into static/dist, which the Go
+# binary embeds.
+FROM node:24-alpine AS web
+WORKDIR /src/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+# vite.config.ts writes to ../internal/webmail/static/dist
+RUN npm run build
+
+# Stage 2: build the Go binary.
 FROM golang:1.27-alpine AS builder
 WORKDIR /src
 
@@ -5,6 +16,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+COPY --from=web /src/internal/webmail/static/dist ./internal/webmail/static/dist
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/mailserver ./cmd/mailserver
 
 FROM alpine:3.20

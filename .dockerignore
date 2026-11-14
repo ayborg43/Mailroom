@@ -2,3 +2,5 @@
 *.md
 docker/
 configs/config.yaml
+web/node_modules
+internal/webmail/static/dist

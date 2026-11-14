@@ -1,32 +1,62 @@
 {{define "message_list"}}
 <div class="list-toolbar">
-  <form hx-get="/mail/{{.CurrentFolder}}/search" hx-target="#message-list" hx-swap="innerHTML">
-    <input type="search" name="q" placeholder="Search {{.CurrentFolder}}" value="{{.Query}}">
+  <form action="/mail/{{.CurrentFolder}}/search" method="get" role="search"
+        hx-get="/mail/{{.CurrentFolder}}/search" hx-trigger="submit" hx-target="#message-results" hx-swap="innerHTML">
+    <input type="search" name="q" placeholder="Search {{.CurrentFolder}}" value="{{.Query}}" aria-label="Search {{.CurrentFolder}}" autocomplete="off"
+           hx-get="/mail/{{.CurrentFolder}}/search" hx-trigger="input changed delay:300ms, search"
+           hx-target="#message-results" hx-swap="innerHTML" hx-sync="this:replace">
   </form>
 </div>
-{{if not .Messages}}
-  <div class="empty-state">No messages</div>
-{{else}}
-  {{range .Messages}}
-  <a class="message-row{{if not (.HasFlag "\\Seen")}} unread{{end}}{{if eq .UID $.SelectedUID}} selected{{end}}"
-     href="/mail/{{$.CurrentFolder}}/{{.UID}}"
-     hx-get="/mail/{{$.CurrentFolder}}/{{.UID}}"
-     hx-target="#reading-pane"
-     hx-swap="innerHTML"
-     hx-push-url="true">
-    <div class="row-top">
-      <span class="row-from">{{if eq $.CurrentFolder "Sent"}}{{.To}}{{else}}{{.From}}{{end}}</span>
-      <span class="row-date">{{fmtDate .Date}}</span>
-    </div>
-    <div class="row-subject">{{if .Subject}}{{.Subject}}{{else}}(no subject){{end}}</div>
-  </a>
-  {{end}}
+<div id="message-results">
+  {{template "message_rows" .}}
+</div>
 {{end}}
-{{if gt .TotalPages 1}}
+
+{{/* Everything below the search box: this is what search swaps in. */}}
+{{define "message_rows"}}
+{{if not .Messages}}
+  <div class="empty-state">{{if .Query}}No messages match “{{.Query}}”{{else}}No messages{{end}}</div>
+{{else}}
+  {{range .Messages}}{{template "message_row" (rowCtx $ . false)}}{{end}}
+{{end}}
+{{if and (gt .TotalPages 1) (not .Query)}}
 <div class="pagination">
   {{if gt .Page 1}}<a href="/mail/{{.CurrentFolder}}?page={{sub .Page 1}}">&larr; Newer</a>{{else}}<span></span>{{end}}
   <span>Page {{.Page}} of {{.TotalPages}}</span>
   {{if lt .Page .TotalPages}}<a href="/mail/{{.CurrentFolder}}?page={{add .Page 1}}">Older &rarr;</a>{{else}}<span></span>{{end}}
 </div>
 {{end}}
+{{end}}
+
+{{/* One list row. With OOB set it swaps itself into the list in place
+     (used after flagging, so the star updates without reloading the list). */}}
+{{define "message_row"}}<a id="row-{{.M.UID}}"{{if .OOB}} hx-swap-oob="true"{{end}} class="message-row{{if not (.M.HasFlag "\\Seen")}} unread{{end}}{{if eq .M.UID .SelectedUID}} selected{{end}}"
+   href="/mail/{{.Folder}}/{{.M.UID}}?page={{.Page}}"
+   hx-get="/mail/{{.Folder}}/{{.M.UID}}?page={{.Page}}"
+   hx-target="#reading-pane"
+   hx-swap="innerHTML"
+   hx-push-url="true">
+  <div class="row-top">
+    <span class="row-from">{{if eq .Folder "Sent"}}{{.M.To}}{{else}}{{.M.From}}{{end}}</span>
+    <span class="row-meta">
+      {{if .M.HasFlag "\\Flagged"}}<span class="row-star" role="img" aria-label="Flagged">&#9733;</span>{{end}}
+      <span class="row-date">{{fmtDate .M.Date}}</span>
+    </span>
+  </div>
+  <div class="row-subject">{{if .M.Subject}}{{.M.Subject}}{{else}}(no subject){{end}}</div>
+</a>
+{{end}}
+
+{{/* Response to an htmx flag toggle: the open message (primary target) plus
+     its refreshed list row (out of band). */}}
+{{define "after_flag"}}
+{{template "message_view" .}}
+{{if .Selected}}{{template "message_row" (rowCtx . .Selected.MessageSummary true)}}{{end}}
+{{end}}
+
+{{/* Response to an htmx delete: the empty reading pane (primary target) plus
+     the refreshed list (out of band). */}}
+{{define "after_delete"}}
+{{template "message_view" .}}
+<div hx-swap-oob="innerHTML:#message-results">{{template "message_rows" .}}</div>
 {{end}}

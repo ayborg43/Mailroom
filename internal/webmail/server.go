@@ -41,6 +41,8 @@ func New(backend *imapbackend.Backend, sender *mailsend.Sender, hostname string,
 		sessions:       newSessionStore(),
 	}
 
+	configureAssets(logger)
+
 	mux := http.NewServeMux()
 	mux.Handle("/static/", staticHandler())
 

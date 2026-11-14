@@ -145,7 +145,13 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request, account *i
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-	render(w, "message_list", data)
+	if !isHTMXRequest(r) {
+		render(w, "mail_page", data) // plain GET (no JavaScript): the whole page
+		return
+	}
+	// Only the rows: the search box lives outside the swapped region so it
+	// keeps focus while results update as the user types.
+	render(w, "message_rows", data)
 }
 
 func (s *Server) handleFlag(w http.ResponseWriter, r *http.Request, account *imapbackend.Account) {
@@ -160,6 +166,9 @@ func (s *Server) handleFlag(w http.ResponseWriter, r *http.Request, account *ima
 		return
 	}
 	flag := r.FormValue("flag")
+	if flag == "" {
+		flag = `\Flagged` // the only flag the UI toggles
+	}
 
 	sum, err := account.GetSummary(folder, uid)
 	if err != nil {
@@ -172,7 +181,28 @@ func (s *Server) handleFlag(w http.ResponseWriter, r *http.Request, account *ima
 		return
 	}
 
+	if isHTMXRequest(r) {
+		// Re-render the open message and, out of band, the list so its
+		// star/unread markers match — without a full page reload.
+		data, err := s.buildPageData(r.Context(), account, folder, uid, formPage(r), "")
+		if err != nil {
+			s.Logger.Error("building flag response", "error", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		render(w, "after_flag", data)
+		return
+	}
 	http.Redirect(w, r, fmt.Sprintf("/mail/%s/%d", folder, uid), http.StatusSeeOther)
+}
+
+// formPage reads the list page the action was taken from (a hidden "page"
+// form field), so refreshing the list afterwards doesn't jump to page 1.
+func formPage(r *http.Request) int {
+	if n, err := strconv.Atoi(r.FormValue("page")); err == nil && n > 0 {
+		return n
+	}
+	return 1
 }
 
 func toggleFlag(flags []string, flag string) []string {
@@ -202,6 +232,25 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request, account *i
 	if err := account.Delete(folder, uid); err != nil {
 		s.Logger.Error("deleting message", "error", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if isHTMXRequest(r) {
+		// Refresh the list out of band and clear the reading pane.
+		data, err := s.buildPageData(r.Context(), account, folder, 0, formPage(r), "")
+		if err != nil {
+			s.Logger.Error("building delete response", "error", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if len(data.Messages) == 0 && data.Page > 1 {
+			// Deleted the last message on the final page; step back one.
+			if data, err = s.buildPageData(r.Context(), account, folder, 0, data.TotalPages, ""); err != nil {
+				s.Logger.Error("building delete response", "error", err)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+		}
+		render(w, "after_delete", data)
 		return
 	}
 	http.Redirect(w, r, "/mail/"+folder, http.StatusSeeOther)

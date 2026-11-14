@@ -4,16 +4,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>{{.CurrentFolder}} - Mail</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <script src="/static/htmx.min.js"></script>
+  {{assets "src/main.ts"}}
 </head>
 <body>
   <div class="app">
-    <input type="checkbox" id="sidebar-toggle" class="sidebar-toggle-checkbox">
+    <input type="checkbox" id="sidebar-toggle" class="sidebar-toggle-checkbox" aria-label="Show folders">
     <label for="sidebar-toggle" class="sidebar-backdrop" aria-hidden="true"></label>
     <header class="mobile-bar">
-      <label for="sidebar-toggle" class="menu-btn" aria-label="Show folders">&#9776;</label>
+      <label for="sidebar-toggle" class="menu-btn" aria-hidden="true">{{icon "menu"}}</label>
       <span class="mobile-bar-title">{{.CurrentFolder}}</span>
     </header>
     {{template "sidebar" .}}
@@ -32,18 +32,22 @@
 <aside class="sidebar">
   <div class="sidebar-header">Mail</div>
   <a class="btn btn-primary compose-btn" href="/compose">Compose</a>
-  <nav>
+  <nav aria-label="Folders">
     {{range .Folders}}
-    <a class="folder-link{{if eq .Name $.CurrentFolder}} active{{end}}" href="/mail/{{.Name}}">
-      <span>{{.Name}}</span>
-      {{if gt .Unseen 0}}<span class="count">{{.Unseen}}</span>{{end}}
+    <a class="folder-link{{if eq .Name $.CurrentFolder}} active{{end}}" href="/mail/{{.Name}}"{{if eq .Name $.CurrentFolder}} aria-current="page"{{end}}>
+      {{folderIcon .Name}}
+      <span class="folder-name">{{.Name}}</span>
+      {{if gt .Unseen 0}}<span class="count" aria-label="{{.Unseen}} unread">{{.Unseen}}</span>{{end}}
     </a>
     {{end}}
   </nav>
   <div class="sidebar-footer">
-    {{.Email}}<br>
-    <a href="/account">Account</a>{{if .IsAdmin}} &middot; <a href="/admin">Admin</a>{{end}}<br>
-    <form method="post" action="/logout" style="margin-top:6px;">
+    <span class="who" title="{{.Email}}">{{.Email}}</span>
+    <span class="links">
+      <a href="/account">Account</a>{{if .IsAdmin}}<a href="/admin">Admin</a>{{end}}
+    </span>
+    <button type="button" class="kbd-hint" data-action="shortcuts-help">Keyboard shortcuts (?)</button>
+    <form method="post" action="/logout">
       <button type="submit" class="btn">Log out</button>
     </form>
   </div>
