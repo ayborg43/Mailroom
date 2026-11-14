@@ -30,6 +30,15 @@ func isHTMXRequest(r *http.Request) bool {
 }
 
 func (s *Server) buildPageData(ctx context.Context, account *imapbackend.Account, folder string, selectedUID uint32, page int, query string) (*pageData, error) {
+	// Open the selected message first: GetMessage marks it \Seen, and the
+	// folder counts and list rows below should already reflect that.
+	var selected *imapbackend.FullMessage
+	if selectedUID != 0 {
+		// Tolerate a stale/invalid UID (e.g. the message was deleted from
+		// another session) rather than failing the whole page load.
+		selected, _ = account.GetMessage(folder, selectedUID)
+	}
+
 	folders, err := account.Folders(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing folders: %w", err)
@@ -48,13 +57,6 @@ func (s *Server) buildPageData(ctx context.Context, account *imapbackend.Account
 		if err != nil {
 			return nil, fmt.Errorf("listing messages: %w", err)
 		}
-	}
-
-	var selected *imapbackend.FullMessage
-	if selectedUID != 0 {
-		// Tolerate a stale/invalid UID (e.g. the message was deleted from
-		// another session) rather than failing the whole page load.
-		selected, _ = account.GetMessage(folder, selectedUID)
 	}
 
 	totalPages := (total + defaultPageSize - 1) / defaultPageSize

@@ -1,0 +1,6 @@
+{{/* Shared <head> pieces. */}}
+
+{{/* Applies the saved theme (and a "js" class for styles that depend on
+     scripting) before first paint, so there's no flash of the wrong theme.
+     Keep in step with web/src/lib/theme.ts. */}}
+{{define "theme_init"}}<meta name="color-scheme" content="light dark"><script>(function(){var d=document.documentElement;d.classList.add("js");try{var t=localStorage.getItem("mail:theme");if(t==="light"||t==="dark")d.setAttribute("data-theme",t)}catch(e){}})()</script>{{end}}

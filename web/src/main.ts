@@ -9,6 +9,7 @@ import { fitHtmlFrames } from './lib/frames'
 import { mountIslands } from './lib/islands'
 import { initListState } from './lib/list'
 import { initShortcuts } from './lib/shortcuts'
+import { initTheme } from './lib/theme'
 
 declare global {
   interface Window {
@@ -25,6 +26,7 @@ function enhance(root: ParentNode = document): void {
   mountIslands(root)
 }
 
+initTheme()
 initShortcuts()
 initListState()
 enhance()

@@ -1,4 +1,10 @@
-/* Design tokens. Light by default; dark follows the OS setting. */
+/* Design tokens. Light by default; dark follows the OS setting unless the
+   user picked a theme, which lib/theme.ts records as <html data-theme="…">.
+
+   The dark values appear twice — once for "system is dark and the user
+   hasn't chosen light", once for an explicit "dark" choice. Keep them in
+   sync. (light-dark() would avoid the repetition, but the build may
+   transpile it in a way that ignores the explicit choice.) */
 :root {
   color-scheme: light dark;
 
@@ -12,12 +18,24 @@
   --accent: #1d5fd6;          /* links, focus rings, accents on text */
   --accent-solid: #2563eb;    /* filled buttons (white text on top) */
   --accent-solid-hover: #1d4ed8;
-  --accent-soft: #e8f0fe;     /* selected row, hover tint */
+  --accent-soft: #e8f0fe;     /* hover tint */
+  --selected: #dbe7fd;        /* the open message in the list */
   --danger: #cf222e;
   --danger-soft: #ffebe9;
   --success: #1a7f37;
   --success-soft: #dafbe1;
+  --star: #c98a00;
   --shadow: 0 8px 28px rgba(15, 23, 42, 0.16);
+
+  /* Avatar palette: soft background + readable foreground per hue. */
+  --av0-bg: #dbe7fd; --av0-fg: #1d4ed8;
+  --av1-bg: #dcf5e4; --av1-fg: #1a7f37;
+  --av2-bg: #fde8d3; --av2-fg: #b45309;
+  --av3-bg: #f3e1fb; --av3-fg: #8e24aa;
+  --av4-bg: #fcdde5; --av4-fg: #be185d;
+  --av5-bg: #d6f2f2; --av5-fg: #0e7490;
+  --av6-bg: #fbf0c4; --av6-fg: #8a6a00;
+  --av7-bg: #e4e1fb; --av7-fg: #5b3fd0;
 
   --radius: 8px;
   --radius-sm: 6px;
@@ -26,7 +44,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #14171b;
     --bg-alt: #1a1e23;
     --bg-sunken: #0f1215;
@@ -38,10 +56,55 @@
     --accent-solid: #3b6fe0;
     --accent-solid-hover: #4b7cea;
     --accent-soft: #1b2a47;
+    --selected: #243a63;
     --danger: #ff7b72;
     --danger-soft: #3a1d1f;
     --success: #3fb950;
     --success-soft: #12301b;
+    --star: #e3b341;
     --shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+
+    --av0-bg: #1f3358; --av0-fg: #8fb4ff;
+    --av1-bg: #163a22; --av1-fg: #5fd17a;
+    --av2-bg: #473018; --av2-fg: #f0a65a;
+    --av3-bg: #3d2447; --av3-fg: #d79bec;
+    --av4-bg: #4a2030; --av4-fg: #f28ab0;
+    --av5-bg: #123a3d; --av5-fg: #59cfd6;
+    --av6-bg: #43390f; --av6-fg: #e3c24a;
+    --av7-bg: #2e2a5c; --av7-fg: #a99bf5;
   }
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #14171b;
+  --bg-alt: #1a1e23;
+  --bg-sunken: #0f1215;
+  --border: #272d34;
+  --border-strong: #3a424c;
+  --text: #e6e9ed;
+  --text-dim: #98a2ae;
+  --accent: #7aa7ff;
+  --accent-solid: #3b6fe0;
+  --accent-solid-hover: #4b7cea;
+  --accent-soft: #1b2a47;
+  --selected: #243a63;
+  --danger: #ff7b72;
+  --danger-soft: #3a1d1f;
+  --success: #3fb950;
+  --success-soft: #12301b;
+  --star: #e3b341;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+
+  --av0-bg: #1f3358; --av0-fg: #8fb4ff;
+  --av1-bg: #163a22; --av1-fg: #5fd17a;
+  --av2-bg: #473018; --av2-fg: #f0a65a;
+  --av3-bg: #3d2447; --av3-fg: #d79bec;
+  --av4-bg: #4a2030; --av4-fg: #f28ab0;
+  --av5-bg: #123a3d; --av5-fg: #59cfd6;
+  --av6-bg: #43390f; --av6-fg: #e3c24a;
+  --av7-bg: #2e2a5c; --av7-fg: #a99bf5;
 }

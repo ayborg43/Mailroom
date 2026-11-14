@@ -30,20 +30,24 @@
 
 {{/* One list row. With OOB set it swaps itself into the list in place
      (used after flagging, so the star updates without reloading the list). */}}
-{{define "message_row"}}<a id="row-{{.M.UID}}"{{if .OOB}} hx-swap-oob="true"{{end}} class="message-row{{if not (.M.HasFlag "\\Seen")}} unread{{end}}{{if eq .M.UID .SelectedUID}} selected{{end}}"
+{{define "message_row"}}{{$who := .M.From}}{{if eq .Folder "Sent"}}{{$who = .M.To}}{{end -}}
+<a id="row-{{.M.UID}}"{{if .OOB}} hx-swap-oob="true"{{end}} class="message-row{{if not (.M.HasFlag "\\Seen")}} unread{{end}}{{if eq .M.UID .SelectedUID}} selected{{end}}"
    href="/mail/{{.Folder}}/{{.M.UID}}?page={{.Page}}"
    hx-get="/mail/{{.Folder}}/{{.M.UID}}?page={{.Page}}"
    hx-target="#reading-pane"
    hx-swap="innerHTML"
    hx-push-url="true">
-  <div class="row-top">
-    <span class="row-from">{{if eq .Folder "Sent"}}{{.M.To}}{{else}}{{.M.From}}{{end}}</span>
-    <span class="row-meta">
-      {{if .M.HasFlag "\\Flagged"}}<span class="row-star" role="img" aria-label="Flagged">&#9733;</span>{{end}}
-      <span class="row-date">{{fmtDate .M.Date}}</span>
-    </span>
+  <span class="avatar {{avatarClass $who}}" aria-hidden="true">{{avatarInitial $who}}</span>
+  <div class="row-body">
+    <div class="row-top">
+      <span class="row-from" title="{{displayAddr $who}}">{{displayName $who}}</span>
+      <span class="row-meta">
+        {{if .M.HasFlag "\\Flagged"}}<span class="row-star" role="img" aria-label="Flagged">&#9733;</span>{{end}}
+        <span class="row-date">{{fmtDate .M.Date}}</span>
+      </span>
+    </div>
+    <div class="row-subject">{{if .M.Subject}}{{.M.Subject}}{{else}}(no subject){{end}}</div>
   </div>
-  <div class="row-subject">{{if .M.Subject}}{{.M.Subject}}{{else}}(no subject){{end}}</div>
 </a>
 {{end}}
 

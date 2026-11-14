@@ -41,6 +41,9 @@ var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 		if time.Since(t) < 20*time.Hour && time.Now().YearDay() == t.YearDay() && time.Now().Year() == t.Year() {
 			return t.Local().Format("3:04 PM")
 		}
+		if t.Local().Year() != time.Now().Year() {
+			return t.Local().Format("Jan 2, 2006") // older mail: say which year
+		}
 		return t.Local().Format("Jan 2")
 	},
 	"fmtDateLong": func(t time.Time) string {
@@ -52,9 +55,13 @@ var tmpl = template.Must(template.New("").Funcs(template.FuncMap{
 	"rowCtx": func(p *pageData, m imapbackend.MessageSummary, oob bool) rowCtx {
 		return rowCtx{M: m, Folder: p.CurrentFolder, Page: p.Page, SelectedUID: p.SelectedUID, OOB: oob}
 	},
-	"assets":     func(entry string) template.HTML { return assets.tags(entry) },
-	"icon":       icon,
-	"folderIcon": folderIcon,
+	"displayName":   displayName,
+	"displayAddr":   displayAddr,
+	"avatarInitial": avatarInitial,
+	"avatarClass":   avatarClass,
+	"assets":        func(entry string) template.HTML { return assets.tags(entry) },
+	"icon":          icon,
+	"folderIcon":    folderIcon,
 	// json marshals a value for a data-* attribute (html/template escapes it
 	// for the attribute context); islands read it as their props.
 	"json": func(v any) (string, error) {
