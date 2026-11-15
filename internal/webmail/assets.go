@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"sort"
 	"strings"
 	"sync/atomic"
 )
@@ -123,4 +124,29 @@ func configureAssets(logger *slog.Logger) {
 	if assets.loadErr != nil {
 		logger.Error("webmail frontend assets are missing; pages will render unstyled. Build them with `npm run build` in web/", "error", assets.loadErr)
 	}
+}
+
+// files lists the URL of every built JS/CSS file in the manifest (entries,
+// lazily loaded chunks, and their stylesheets), for the service worker to
+// precache. It's empty when the frontend hasn't been built or in dev mode.
+func (a *assetSet) files() []string {
+	if a.dev.Load() {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	add := func(f string) {
+		if f != "" && !seen[f] {
+			seen[f] = true
+			out = append(out, distURLPrefix+f)
+		}
+	}
+	for _, e := range a.manifest {
+		add(e.File)
+		for _, c := range e.CSS {
+			add(c)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

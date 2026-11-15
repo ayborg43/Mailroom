@@ -8,6 +8,8 @@ import './styles/compose.css'
 import { fitHtmlFrames } from './lib/frames'
 import { mountIslands } from './lib/islands'
 import { initListState } from './lib/list'
+import { initLogoutCleanup, initPushSettings } from './lib/push'
+import { initInstallPrompt, registerServiceWorker } from './lib/pwa'
 import { initShortcuts } from './lib/shortcuts'
 import { initTheme } from './lib/theme'
 
@@ -29,6 +31,10 @@ function enhance(root: ParentNode = document): void {
 initTheme()
 initShortcuts()
 initListState()
+registerServiceWorker()
+initInstallPrompt()
+initPushSettings()
+initLogoutCleanup()
 enhance()
 // htmx swaps in new fragments (message view, list); enhance those too.
 document.addEventListener('htmx:load', (e) => enhance((e.target as ParentNode) ?? document))

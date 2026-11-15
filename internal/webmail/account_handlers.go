@@ -27,6 +27,10 @@ type accountData struct {
 	// Forwarding is this mailbox's own copy-to-another-address rule.
 	ForwardingEnabled bool
 	ForwardTo         string
+
+	// PushKey is the server's Web Push public key; empty means push
+	// notifications are unavailable and the section is hidden.
+	PushKey string
 }
 
 func (s *Server) newAccountData(ctx context.Context, account *imapbackend.Account) accountData {
@@ -36,6 +40,10 @@ func (s *Server) newAccountData(ctx context.Context, account *imapbackend.Accoun
 		Hostname: s.Hostname,
 		IMAPPort: portFromAddr(s.Backend.Config.Listen.IMAP),
 		SMTPPort: portFromAddr(s.Backend.Config.Listen.Submission),
+	}
+
+	if s.Push != nil {
+		data.PushKey = s.Push.PublicKey()
 	}
 
 	if f, err := s.Backend.Store.GetForwarding(ctx, account.ID()); err == nil {

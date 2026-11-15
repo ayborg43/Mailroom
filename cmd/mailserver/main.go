@@ -29,6 +29,7 @@ import (
 	"github.com/sociolytik/mailserver/internal/maildir"
 	"github.com/sociolytik/mailserver/internal/mailsend"
 	"github.com/sociolytik/mailserver/internal/metrics"
+	"github.com/sociolytik/mailserver/internal/push"
 	"github.com/sociolytik/mailserver/internal/queue"
 	"github.com/sociolytik/mailserver/internal/ratelimit"
 	"github.com/sociolytik/mailserver/internal/realip"
@@ -164,7 +165,22 @@ func cmdServe(args []string) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	inboundBackend := &smtpserver.InboundBackend{Config: cfg, Store: db, Logger: logger}
+	// Web Push for new-mail notifications. A failure here shouldn't take the
+	// mail server down, so it just leaves the feature off.
+	pushSubject := "mailto:postmaster@" + cfg.Hostname
+	if cfg.Admin.Email != "" {
+		pushSubject = "mailto:" + cfg.Admin.Email
+	}
+	var notifier push.Notifier
+	pushService, err := push.New(ctx, db, pushSubject, logger)
+	if err != nil {
+		logger.Error("Web Push notifications disabled", "error", err)
+		pushService = nil
+	} else {
+		notifier = pushService
+	}
+
+	inboundBackend := &smtpserver.InboundBackend{Config: cfg, Store: db, Logger: logger, Notifier: notifier}
 	inboundServer := smtp.NewServer(inboundBackend)
 	inboundServer.Addr = cfg.Listen.SMTP
 	inboundServer.Domain = cfg.Hostname
@@ -222,7 +238,7 @@ func cmdServe(args []string) {
 	}
 	dkimSigner := dkimsign.Signer(cfg.DKIM.Selector, dkimKey)
 
-	sender := &mailsend.Sender{Config: cfg, Store: db, Queue: mailQueue, Logger: logger, Sign: dkimSigner}
+	sender := &mailsend.Sender{Config: cfg, Store: db, Queue: mailQueue, Logger: logger, Sign: dkimSigner, Notifier: notifier}
 
 	// Brute-force protection. All three surfaces (SMTP AUTH, IMAP LOGIN,
 	// webmail login) get their own limiter instance so a lockout on one
@@ -274,7 +290,7 @@ func cmdServe(args []string) {
 	// requirement that it not go over the wire to reach IMAP/SMTP.
 	webmailServer := &http.Server{
 		Addr:              cfg.Listen.Webmail,
-		Handler:           webmail.New(imapBackend, sender, cfg.Hostname, logger, webmailLimiter, trustedProxies),
+		Handler:           webmail.New(imapBackend, sender, cfg.Hostname, logger, webmailLimiter, trustedProxies, pushService),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

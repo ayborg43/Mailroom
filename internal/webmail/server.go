@@ -12,6 +12,7 @@ import (
 
 	"github.com/sociolytik/mailserver/internal/imapbackend"
 	"github.com/sociolytik/mailserver/internal/mailsend"
+	"github.com/sociolytik/mailserver/internal/push"
 	"github.com/sociolytik/mailserver/internal/ratelimit"
 	"github.com/sociolytik/mailserver/internal/realip"
 )
@@ -25,12 +26,13 @@ type Server struct {
 	Logger         *slog.Logger
 	RateLimiter    *ratelimit.Limiter    // brute-force protection on /login
 	TrustedProxies realip.TrustedProxies // who may supply X-Forwarded-For (normally just Traefik)
+	Push           *push.Service         // Web Push notifications; nil disables the feature
 
 	sessions *sessionStore
 	mux      *http.ServeMux
 }
 
-func New(backend *imapbackend.Backend, sender *mailsend.Sender, hostname string, logger *slog.Logger, rateLimiter *ratelimit.Limiter, trustedProxies realip.TrustedProxies) *Server {
+func New(backend *imapbackend.Backend, sender *mailsend.Sender, hostname string, logger *slog.Logger, rateLimiter *ratelimit.Limiter, trustedProxies realip.TrustedProxies, pushService *push.Service) *Server {
 	s := &Server{
 		Backend:        backend,
 		Sender:         sender,
@@ -38,6 +40,7 @@ func New(backend *imapbackend.Backend, sender *mailsend.Sender, hostname string,
 		Logger:         logger,
 		RateLimiter:    rateLimiter,
 		TrustedProxies: trustedProxies,
+		Push:           pushService,
 		sessions:       newSessionStore(),
 	}
 
@@ -69,6 +72,18 @@ func New(backend *imapbackend.Backend, sender *mailsend.Sender, hostname string,
 	mux.HandleFunc("GET /account", s.requireAuth(s.handleAccountPage))
 	mux.HandleFunc("POST /account/password", s.requireAuth(s.handleAccountPasswordChange))
 	mux.HandleFunc("POST /account/forwarding", s.requireAuth(s.handleAccountForwarding))
+
+	// PWA: public by necessity (the browser fetches these without a session).
+	mux.HandleFunc("GET /manifest.webmanifest", s.handleManifest)
+	mux.HandleFunc("GET /sw.js", s.handleServiceWorker)
+	mux.HandleFunc("GET /offline", s.handleOffline)
+
+	// Web Push device registration. Only registered when push is enabled.
+	if s.Push != nil {
+		mux.HandleFunc("POST /push/subscribe", s.requireAuthAPI(s.handlePushSubscribe))
+		mux.HandleFunc("POST /push/unsubscribe", s.requireAuthAPI(s.handlePushUnsubscribe))
+		mux.HandleFunc("POST /push/test", s.requireAuthAPI(s.handlePushTest))
+	}
 
 	s.mux = mux
 	return s

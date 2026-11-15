@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Account - Mail</title>
-  {{template "theme_init"}}
+  {{template "head_common"}}
   {{assets "src/main.ts"}}
 </head>
 <body>
@@ -64,6 +64,34 @@
         </tbody>
       </table>
     </div>
+
+    <div class="install-card" data-install hidden>
+      <h2>Install app</h2>
+      <p class="field-hint">
+        Add Mail to your home screen or desktop to open it in its own window,
+        like any other app.
+      </p>
+      <button type="button" class="btn btn-primary" data-install-button hidden>Install Mail</button>
+      <p class="field-hint" data-install-hint hidden>
+        On iPhone and iPad: tap Share, then &ldquo;Add to Home Screen&rdquo;.
+      </p>
+    </div>
+
+    {{if .PushKey}}
+    <h2>Notifications</h2>
+    <p class="field-hint">
+      Get an alert on this device when new mail reaches your inbox, even
+      when Mail isn&rsquo;t open. Alerts show only who the message is from.
+    </p>
+    <div class="push-card" data-push data-vapid-key="{{.PushKey}}" hidden>
+      <p class="push-status" data-push-status aria-live="polite">Checking this device&hellip;</p>
+      <div class="push-actions">
+        <button type="button" class="btn btn-primary" data-push-enable hidden>Turn on notifications</button>
+        <button type="button" class="btn" data-push-test hidden>Send a test</button>
+        <button type="button" class="btn" data-push-disable hidden>Turn off</button>
+      </div>
+    </div>
+    {{end}}
 
     <h2>Forwarding</h2>
     <p class="field-hint">

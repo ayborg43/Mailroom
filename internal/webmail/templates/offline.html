@@ -1,0 +1,25 @@
+{{define "offline_page"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Offline - Mail</title>
+  {{template "head_common"}}
+  {{assets "src/main.ts"}}
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-box">
+      <h1>You&rsquo;re offline</h1>
+      <p class="field-hint">
+        Mail couldn&rsquo;t reach the server. Your messages aren&rsquo;t stored
+        on this device, so there&rsquo;s nothing to show until you&rsquo;re
+        back online.
+      </p>
+      <p><a class="btn btn-primary btn-block" href="/mail/INBOX">Try again</a></p>
+    </div>
+  </div>
+</body>
+</html>
+{{end}}

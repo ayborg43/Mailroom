@@ -18,6 +18,7 @@ import (
 	"github.com/sociolytik/mailserver/internal/inboundauth"
 	"github.com/sociolytik/mailserver/internal/maildir"
 	"github.com/sociolytik/mailserver/internal/metrics"
+	"github.com/sociolytik/mailserver/internal/push"
 	"github.com/sociolytik/mailserver/internal/queue"
 	"github.com/sociolytik/mailserver/internal/store"
 )
@@ -34,6 +35,10 @@ type InboundBackend struct {
 	Store  *store.Store
 	Queue  *queue.Queue
 	Logger *slog.Logger
+
+	// Notifier, if set, is told about each message delivered to a mailbox's
+	// INBOX so it can send a push notification. It must not block.
+	Notifier push.Notifier
 }
 
 func (b *InboundBackend) NewSession(c *smtp.Conn) (smtp.Session, error) {
@@ -120,6 +125,10 @@ func (s *inboundSession) Data(r io.Reader) error {
 			metrics.SMTPMessages.WithLabelValues("inbound", "accepted").Inc()
 		}
 
+		if folder == "INBOX" && s.backend.Notifier != nil {
+			s.backend.Notifier.NewMail(rcpt, full)
+		}
+
 		s.forward(rcpt, s.rcptUsers[i].ID, full)
 	}
 
@@ -164,6 +173,9 @@ func (s *inboundSession) forward(rcpt string, userID int64, full []byte) {
 			return
 		}
 		s.backend.Logger.Info("forwarded message locally", "from", rcpt, "to", fw.ForwardTo, "bytes", len(full))
+		if s.backend.Notifier != nil {
+			s.backend.Notifier.NewMail(fw.ForwardTo, full)
+		}
 		metrics.SMTPMessages.WithLabelValues("inbound", "forwarded").Inc()
 		return
 	}

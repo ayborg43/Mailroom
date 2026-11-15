@@ -1,5 +1,9 @@
 * { box-sizing: border-box; }
 
+/* Author styles like .btn{display:inline-flex} would otherwise override the
+   browser's [hidden]{display:none}. */
+[hidden] { display: none !important; }
+
 html, body { margin: 0; }
 
 body {
@@ -107,6 +111,10 @@ a:hover { text-decoration: underline; }
 .admin-table th, .admin-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
 .admin-table th { color: var(--text-dim); font-weight: 600; }
 .admin-form { margin-top: 12px; }
+
+.push-card { margin-top: 10px; }
+.push-status { margin: 0; font-size: 13px; color: var(--text-dim); max-width: 60ch; }
+.push-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 
 @media (max-width: 768px) {
   .admin-page, .account-page { padding: 16px; }

@@ -1,6 +1,17 @@
 {{/* Shared <head> pieces. */}}
 
-{{/* Applies the saved theme (and a "js" class for styles that depend on
-     scripting) before first paint, so there's no flash of the wrong theme.
-     Keep in step with web/src/lib/theme.ts. */}}
-{{define "theme_init"}}<meta name="color-scheme" content="light dark"><script>(function(){var d=document.documentElement;d.classList.add("js");try{var t=localStorage.getItem("mail:theme");if(t==="light"||t==="dark")d.setAttribute("data-theme",t)}catch(e){}})()</script>{{end}}
+{{/* Everything every page needs in <head> besides its title and assets:
+     colour-scheme and PWA metadata, plus a tiny script that applies the saved
+     theme (and a "js" class for styles that depend on scripting) before first
+     paint, so there's no flash of the wrong theme. Keep the script in step
+     with web/src/lib/theme.ts. */}}
+{{define "head_common"}}<meta name="color-scheme" content="light dark">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#14171b">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Mail">
+  <script>(function(){var d=document.documentElement;d.classList.add("js");try{var t=localStorage.getItem("mail:theme");if(t==="light"||t==="dark")d.setAttribute("data-theme",t)}catch(e){}})()</script>{{end}}

@@ -12,6 +12,7 @@ import (
 	"github.com/sociolytik/mailserver/internal/address"
 	"github.com/sociolytik/mailserver/internal/config"
 	"github.com/sociolytik/mailserver/internal/maildir"
+	"github.com/sociolytik/mailserver/internal/push"
 	"github.com/sociolytik/mailserver/internal/queue"
 	"github.com/sociolytik/mailserver/internal/store"
 )
@@ -28,6 +29,10 @@ type Sender struct {
 	// Sign, if set, DKIM-signs the message before delivery. It's called
 	// with the sender's domain (the "d=" the signature should use).
 	Sign func(domain string, data []byte) ([]byte, error)
+
+	// Notifier, if set, is told about each message delivered locally to a
+	// mailbox's INBOX so it can send a push notification. It must not block.
+	Notifier push.Notifier
 }
 
 // Send DKIM-signs data (if Sign is set) and, for each recipient, either
@@ -62,6 +67,9 @@ func (s *Sender) Send(from string, rcpts []string, data []byte) ([]byte, error) 
 				return nil, fmt.Errorf("delivering to %s: %w", rcpt, err)
 			}
 			s.Logger.Info("delivered submitted message locally", "from", from, "to", rcpt, "bytes", len(full))
+			if s.Notifier != nil {
+				s.Notifier.NewMail(rcpt, full)
+			}
 			continue
 		}
 

@@ -48,3 +48,11 @@ var (
 		Help: "SPF/DKIM/DMARC verification results for inbound mail.",
 	}, []string{"check", "result"})
 )
+
+// PushNotifications counts Web Push sends by result: "sent", "failed", or
+// "expired" (the push service said the subscription is gone and it was
+// removed).
+var PushNotifications = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "mailserver_push_notifications_total",
+	Help: "Web Push notifications by result.",
+}, []string{"result"})

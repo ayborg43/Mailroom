@@ -4,6 +4,7 @@ go 1.27.0
 
 require (
 	blitiri.com.ar/go/spf v1.6.0
+	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
 	github.com/emersion/go-message v0.18.2
 	github.com/emersion/go-msgauth v0.7.0
@@ -26,6 +27,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

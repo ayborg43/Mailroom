@@ -243,6 +243,45 @@ build the pages just render unstyled, and the server logs an error saying so.
 Run `npm run build` before `go build` if you want the real UI in a local
 binary.
 
+### Installing as an app, and new-mail notifications
+
+The webmail is a progressive web app. It serves a manifest (`/manifest.webmanifest`),
+icons, and a service worker (`/sw.js`), so browsers offer to install it — an
+install button on the account page (Chrome/Edge), or on iPhone/iPad Share →
+Add to Home Screen. It needs HTTPS, which Traefik already provides.
+
+The service worker caches only the static CSS/JS and an offline page. It never
+caches mail: messages, lists and attachments always come from the server, so
+nothing private lingers on a device after you sign out.
+
+**Push notifications** (Account → Notifications) alert a device when mail
+reaches the INBOX, even when the app isn't open:
+
+- Each device opts in itself ("Turn on notifications"); there's a test button.
+  The server keeps one VAPID key pair (generated on first start into the
+  database, `push_vapid`) and one row per device (`push_subscriptions`). The
+  private key is stored in plaintext like the relay password — guard database
+  access accordingly.
+- Notifications show only the **sender's name** — never the subject or body —
+  and are encrypted to the device. A burst of mail is coalesced into one
+  follow-up ("5 new messages") so a mailing-list dump doesn't buzz the phone
+  repeatedly. Junk-folder mail doesn't notify.
+- Signing out switches notifications off for that device. A device that
+  changes hands is reassigned to whoever last enabled notifications on it.
+- On iPhone/iPad, web push only works after the app is added to the Home
+  Screen (iOS 16.4+). Brave needs "Use Google Services for Push Messaging".
+- The server POSTs to whatever endpoint a browser registers, so endpoints must
+  be `https` on port 443, and the sender refuses to connect to private,
+  loopback or link-local addresses (no proxy is used for these requests).
+  Egress to the public push services (`fcm.googleapis.com`,
+  `*.push.apple.com`, `updates.push.services.mozilla.com`, WNS) must be open.
+- Prometheus: `mailserver_push_notifications_total{result="sent|failed|expired"}`.
+- If push setup fails at startup the server logs it and carries on without
+  the feature (the Notifications section is hidden).
+
+To regenerate the icons: `python3 web/scripts/make-icons.py` (needs Pillow);
+the generated PNGs are committed.
+
 ## Deploying with Dokploy
 
 This repo works as a Dokploy "Compose" application — you point Dokploy at
